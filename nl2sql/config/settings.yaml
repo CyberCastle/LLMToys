@@ -1,0 +1,1132 @@
+# Configuracion unificada interna de NL2SQL.
+# Este archivo concentra prompts, heuristicas y reglas tecnicas del pipeline.
+# Las reglas semanticas y de negocio del dominio siguen viviendo en
+# schema-docs/semantic_rules.yaml.
+
+# ============================================================
+# 1. SEMANTIC PRUNE
+# Config interna del pruning semantico del esquema fisico.
+# ============================================================
+
+semantic_prune:
+    # Prompts y plantillas del semantic prune.
+    # Este bloque concentra las instrucciones de embedding/rerank y las
+    # plantillas que se renderizan antes de invocar los modelos.
+    prompts:
+        embedding:
+            # Instruccion semantica para la query que se embebe.
+            task_instruction: "Given a web search query, retrieve relevant passages that answer the query"
+            # Plantilla final enviada al modelo de embeddings.
+            query_template: |
+                Instruct: {task}
+                Query:{query}
+        listwise_rerank:
+            # Instruccion principal usada por el PRF/listwise.
+            task_instruction: "Given a web search query and some relevant documents, rerank the documents that answer the query:"
+            # Contenido del mensaje user antes de aplicar el chat template del tokenizer.
+            prompt_template: |
+                {task}
+                Documents:
+                {documents}
+                Search Query:{query}
+
+    # Heuristicas internas del semantic prune.
+    # Este bloque agrupa prioridades y thresholds que antes vivian separados
+    # en assets internos y hoy forman parte del YAML unificado.
+    heuristic_rules:
+        # Prioridad de razones de seleccion cuando una tabla entra al esquema podado.
+        # fk_path aqui es una razon; heuristic_rules.fk_path configura la busqueda.
+        table_selection_reason_priority:
+            outbound: 1
+            inbound: 1
+            bridge: 2
+            fk_path: 3
+            semantic: 4
+            semantic_join_path: 5
+        # Pesos aplicados al score de tablas durante el pruning.
+        # Los nombres lexical_* y output_* se repiten en column_signal por alcance.
+        table_signal:
+            lexical_bonus_cap: 0.18
+            lexical_overlap_weight: 0.08
+            richness_bonus_cap: 0.08
+            richness_extra_column_weight: 0.008
+            temporal_bonus_base: 0.04
+            temporal_bonus_per_column: 0.01
+            temporal_bonus_cap: 0.08
+            grouping_bonus_base: 0.03
+            grouping_bonus_per_fk: 0.01
+            grouping_bonus_cap: 0.07
+            aggregation_structural_bonus: 0.04
+            aggregation_numeric_fk_bonus: 0.02
+            lookup_penalty: -0.16
+            output_min: -0.20
+            output_max: 0.28
+        # Pesos aplicados al score de columnas durante el pruning.
+        # No comparten estado con table_signal aunque usen nombres equivalentes.
+        column_signal:
+            lexical_bonus_cap: 0.12
+            lexical_overlap_weight: 0.05
+            temporal_type_bonus: 0.02
+            temporal_name_bonus: 0.04
+            output_min: 0.0
+            output_max: 0.18
+        seed_selection:
+            anchor_min_floor: 0.20
+            anchor_min_margin: 0.08
+        relationship_expansion:
+            outbound_hops: 0
+            inbound_hops: 1
+            max_neighbors_per_table: 1
+            outbound_min_score: 0.30
+            inbound_min_score: 0.40
+            bridge_max_hops: 6
+            bridge_table_min_score: 0.20
+            unused_foreign_key_score_margin: 0.05
+        fk_path:
+            enabled: true
+            max_hops: 6
+            anchor_min_overlap: 1
+            max_anchors_per_role: 2
+        # Perfil estructural usado solo por semantic_prune.
+        # Los umbrales lookup_* del resolver pertenecen al compilador semantico.
+        structure_profile:
+            lookup_column_count_max: 4
+            lookup_max_numeric_columns: 1
+            lookup_min_descriptor_columns: 2
+            lookup_descriptor_margin: 1
+            richness_extra_columns_start: 4
+            temporal_bonus_column_cap: 4
+            grouping_bonus_fk_cap: 4
+            aggregation_min_column_count: 6
+            aggregation_min_numeric_columns: 2
+            derived_table_suffixes:
+                - _version
+                - _historico
+                - _historia
+                - _log
+                - _audit
+                - _auditoria
+        relationship_scoring:
+            primary_evidence_weight: 0.65
+            supporting_evidence_weight: 0.35
+            lookup_edge_penalty: 5.0
+
+    # Reglas lexicas usadas para interpretar la pregunta durante pruning.
+    # Aqui viven tanto los defaults genericos como los ajustes bilingues del
+    # dominio que antes estaban repartidos entre assets y semantic_rules.
+    query_signal_rules:
+        groupby_dimension_patterns:
+            - "\\bby\\s+([a-z0-9_\\s]+?)(?:\\s+(?:in|of|with|during|for)\\b|$)"
+            - "\\bpor\\s+([a-z0-9_\\s]+?)(?:\\s+(?:en|del|de|con|durante|para|segun)\\b|$)"
+            - "\\bagrupad[oa]s?\\s+por\\s+([a-z0-9_\\s]+)"
+            - "\\bgroup\\s+by\\s+([a-z0-9_\\s,]+)"
+        query_term_stopwords:
+            - a
+            - an
+            - and
+            - by
+            - con
+            - de
+            - del
+            - el
+            - en
+            - for
+            - in
+            - la
+            - las
+            - los
+            - of
+            - on
+            - para
+            - por
+            - que
+            - the
+            - to
+            - un
+            - una
+            - ultimo
+            - ultima
+            - ultimos
+            - ultimas
+            - with
+        query_intent_noise_terms:
+            - como
+            - cual
+            - cuales
+            - cualquiera
+            - cuanto
+            - cuantos
+            - cuanta
+            - cuantas
+            - dame
+            - find
+            - give
+            - listar
+            - lista
+            - list
+            - muestra
+            - mostrar
+            - quiero
+            - show
+            - trae
+            - what
+            - which
+            - who
+        query_temporal_terms:
+            - ano
+            - date
+            - day
+            - dia
+            - fecha
+            - month
+            - periodo
+            - quarter
+            - semana
+            - time
+            - timestamp
+            - trimestre
+            - week
+            - year
+            - mes
+        query_aggregation_terms:
+            - avg
+            - average
+            - cantidad
+            - conteo
+            - count
+            - media
+            - mean
+            - numero
+            - promedio
+            - sum
+            - suma
+            - total
+        temporal_column_name_terms:
+            - ano
+            - date
+            - day
+            - dia
+            - fecha
+            - mes
+            - periodo
+            - quarter
+            - semana
+            - time
+            - timestamp
+            - trimestre
+            - week
+            - year
+        lookup_descriptor_terms:
+            - abreviatura
+            - code
+            - codigo
+            - description
+            - descripcion
+            - estado
+            - id
+            - label
+            - name
+            - nombre
+            - sigla
+            - simbolo
+            - status
+            - symbol
+            - tipo
+            - type
+        # Terminos que identifican tablas "documentales" (carpetas, archivos,
+        # adjuntos o enlaces a repositorios externos). Estas tablas describen
+        # metadata documental, no la entidad de negocio; por eso se excluyen de
+        # ser anclas de metrica/dimension salvo que la consulta misma pida
+        # documentos.
+        documental_terms:
+            - attachment
+            - attachments
+            - box
+            - carpeta
+            - carpetas
+            - document
+            - documento
+            - documentos
+            - archivo
+            - archivos
+            - adjunto
+            - adjuntos
+            - documents
+            - file
+            - files
+            - folder
+            - folders
+            - repository
+            - sharepoint
+            - repositorio
+        query_enrichment_temporal_hints:
+            "ultim(?:o|a|os|as)\\s+ano": "fecha anio year periodo date time timestamp"
+            "ultim(?:o|a|os|as)\\s+mes": "fecha mes month periodo date time timestamp"
+            "ultim(?:o|a|os|as)\\s+semana": "fecha semana week periodo date time timestamp"
+            "trimestre": "fecha trimestre quarter periodo date time timestamp"
+            "hoy|ayer|manana": "fecha dia day calendario date time timestamp"
+        query_enrichment_aggregation_hints:
+            promedio: "avg average media mean"
+            total: "sum total acumulado"
+            conteo: "count cantidad numero"
+            cantidad: "count cantidad numero"
+            maximo: "max maxima mayor"
+            minimo: "min minima menor"
+        singular_suffix_rules: # Cada item usa suffix/replacement/min_length como schema de regla.
+            - suffix: es
+              replacement: ""
+              min_length: 5
+            - suffix: s
+              replacement: ""
+              min_length: 4
+
+    # Limites tecnicos para la serializacion compacta del pruning/listwise.
+    text_formatting:
+        table_column_summary_limit: 8
+        table_foreign_key_limit: 4
+        column_relation_summary_limit: 2
+        eos_token_budget_cushion: 2
+
+    # Tuning operativo del recall inicial, MMR y compactacion de documentos.
+    runtime_tuning:
+        top_k_matches: 12
+        top_k_tables: 5
+        top_k_columns_per_table: 6
+        min_score: 0.20
+        table_score_doc_weight: 0.60
+        table_score_column_topn: 3
+        mmr_enabled: true
+        mmr_lambda: 0.60
+        mmr_candidate_pool_size: 24
+        adaptive_threshold_k_sigma: 1.0
+        adaptive_threshold_k_sigma_columns: 0.75
+        table_listwise_input_docs: 20
+        column_listwise_input_docs: 20
+        max_tokens_per_doc: 300
+        listwise_min_tokens_per_doc: 64
+        listwise_token_step: 48
+        listwise_score_alpha: 0.10
+        preview_chars: 220
+
+# ============================================================
+# 2. SEMANTIC RESOLVER
+# Config interna del retrieval, rerank, verificacion y compilacion semantica.
+# ============================================================
+
+semantic_resolver:
+    # Prompts y plantillas del semantic resolver.
+    # Este bloque centraliza tanto las instrucciones de embedding como los
+    # prompts del reranker y del verificador semantico.
+    prompts:
+        embedding:
+            # Instruccion principal para recuperar activos semanticos.
+            query_instruction: "Given a business question in Spanish about a SQL Server data warehouse, retrieve the semantic assets that are needed to answer it."
+            # Plantilla final enviada al modelo de embeddings.
+            query_template: |
+                Instruct: {instruction}
+                Query:{query}
+        rerank:
+            # Instruccion usada por el reranker binario yes/no.
+            instruction: "Given a business question, decide if the semantic asset is useful to answer it."
+            # Prompt de sistema del reranker.
+            system_prompt: |
+                Judge whether the Document meets the requirements based on the Query and the Instruct provided. Note that the answer can only be "yes" or "no".
+            # Prompt user con la pareja query/document a evaluar.
+            user_prompt_template: |
+                <Instruct>: {instruction}
+
+                <Query>: {query}
+
+                <Document>: {document}
+        verifier:
+            # Prompt de sistema del verificador semantico local.
+            system_prompt: |
+                You are a local semantic verifier for NL2SQL plans.
+                Review whether the compiled_plan actually answers the business question.
+                Respond ONLY with a valid JSON object that matches this contract:
+                {verification_contract_json}
+                Do not add markdown, comments, or any extra text.
+            # Prompt user con el plan compilado, esquema podado y ejemplos.
+            user_prompt_template: |
+                question:
+                {query}
+
+                compiled_plan:
+                {compiled_plan_yaml}
+
+                pruned_schema:
+                {pruned_schema_yaml}
+
+                few_shot_examples:
+                {few_shot_examples_yaml}
+
+    # Tuning operativo del retrieval, rerank y caps finales del resolver.
+    runtime_tuning:
+        top_k_retrieval: 40
+        top_k_rerank: 40
+        min_embedding_score: 0.25
+        min_rerank_score: 0.0
+        compatibility_min_score: 0.20
+        synonym_query_expansion_max_entities: 6
+        synonym_direct_boost: 0.20
+        synonym_related_boost: 0.08
+        rerank_batch_size: 8
+        rerank_max_document_chars: 2400
+        rerank_logprobs: 20
+        rerank_prompt_token_margin: 16
+        rerank_positive_token_candidates:
+            - yes
+            - " yes"
+        rerank_negative_token_candidates:
+            - no
+            - " no"
+        rerank_suffix: |
+            <|im_end|>
+            <|im_start|>assistant
+            <think>
+
+            </think>
+
+        verifier_few_shot_limit: 3
+        max_semantic_repair_attempts: 1
+        default_post_aggregation_function: avg
+        per_kind_caps:
+            semantic_entities: 6
+            semantic_metrics: 6
+            semantic_dimensions: 6
+            semantic_filters: 4
+            semantic_business_rules: 4
+            semantic_relationships: 6
+            semantic_synonyms: 8
+            semantic_examples: 3
+            semantic_constraints: 4
+            semantic_models: 2
+
+    # Reglas del compilador de planes semanticos.
+    # Este bloque agrupa patrones, tokens y pesos que antes se repartian entre
+    # defaults genericos y ajustes del dominio.
+    compiler_rules:
+        # -------------------------------------------------------------------
+        # Deteccion de intencion de la query (plan_intent.py)
+        # Cada entrada es una lista de expresiones regulares; la primera
+        # categoria que coincida gana.
+        # -------------------------------------------------------------------
+        intent_patterns:
+            post_aggregated_metric:
+                - "\\baverage\\s+of\\s+.+?\\s+by\\b"
+                - "\\bpromedio\\s+de\\s+.+?\\s+por\\b"
+                - "\\bmedia\\s+de\\s+.+?\\s+por\\b"
+                - "\\bavg\\s+of\\b"
+                - "\\bavg\\s+de\\b"
+                - "\\bratio\\s+of\\b"
+                - "\\bratio\\s+de\\b"
+            ranking:
+                - "\\btop\\s+\\d+\\b"
+                - "\\bhighest\\b"
+                - "\\blowest\\b"
+                - "\\bmayor(?:es)?\\b"
+                - "\\bmenor(?:es)?\\b"
+                - "\\branking\\b"
+            filter_metric:
+                - "\\blast\\b"
+                - "\\bbetween\\b"
+                - "\\bfrom\\b"
+                - "\\bduring\\b"
+                - "\\bultimo\\b"
+                - "\\bultimos\\b"
+                - "\\bentre\\b"
+                - "\\bdesde\\b"
+                - "\\benh?\\b"
+            simple_metric:
+                - "\\bhow\\s+many\\b"
+                - "\\bcuanta(?:s)?\\b"
+                - "\\btotal(?:es)?\\b"
+                - "\\bsum\\b"
+                - "\\bsuma\\b"
+                - "\\bcount\\b"
+                - "\\bcantidad\\b"
+        # -------------------------------------------------------------------
+        # Extraccion de dimension de agrupacion ("by <dim>" o "por <dim>")
+        # Patron principal que captura la frase de dimension sin el conector.
+        # -------------------------------------------------------------------
+        group_by_pattern: "\\b(?:by|por)\\s+([a-z0-9_\\s,]+?)(?=\\s+(?:in|of|with|during|for|en|del|de|con|durante|para|segun)\\b|$)"
+        # -------------------------------------------------------------------
+        # Extraccion de terminos de medida a partir de la query.
+        # Cada patron captura un fragmento candidato; el primero que coincida
+        # se usa para orientar la seleccion de metricas.
+        # -------------------------------------------------------------------
+        measure_hint_patterns:
+            - "\\b(?:average|avg|ratio)\\s+(?:of\\s+)?([a-z0-9_\\s]+?)(?=\\s+by\\b|\\s+in\\b|$)"
+            - "\\b(?:promedio|media|avg|ratio)\\s+de\\s+([a-z0-9_\\s]+?)(?=\\s+por\\b|\\s+en\\b|$)"
+            - "\\b(?:how\\s+many|count\\s+of|number\\s+of|total(?:s)?\\s+of|sum\\s+of)\\s+([a-z0-9_\\s]+?)(?=\\s+by\\b|\\s+in\\b|$)"
+            - "\\b(?:cuanta|cuantas|cantidad\\s+de|numero\\s+de|total(?:es)?\\s+de|suma\\s+de)\\s+([a-z0-9_\\s]+?)(?=\\s+por\\b|\\s+en\\b|$)"
+        # -------------------------------------------------------------------
+        # Tokens que indican que la pregunta esta pidiendo proporcion/tasa.
+        # Se usan para evitar penalizar metricas ratio cuando la consulta si lo pide.
+        # -------------------------------------------------------------------
+        ratio_query_tokens:
+            - conversion
+            - percent
+            - percentage
+            - porcentaje
+            - proporcion
+            - ratio
+            - rate
+            - tasa
+        # -------------------------------------------------------------------
+        # Patrones de tiempo relativo.
+        # Cada entrada declara el patron regex, el operador SQL, un valor
+        # canonico legible y, opcionalmente, expresiones por dialecto bajo
+        # claves value_<dialect>.
+        # -------------------------------------------------------------------
+        time_patterns:
+            - pattern: "\\blast\\s+year\\b"
+              operator: ">="
+              value: "today - 1 year"
+              value_tsql: "DATEADD(year, -1, CAST(GETDATE() AS date))"
+              value_postgres: "(CURRENT_DATE - INTERVAL '1 year')"
+            - pattern: "\\bultimo\\s+ano\\b"
+              operator: ">="
+              value: "today - 1 year"
+              value_tsql: "DATEADD(year, -1, CAST(GETDATE() AS date))"
+              value_postgres: "(CURRENT_DATE - INTERVAL '1 year')"
+            - pattern: "\\blast\\s+month\\b"
+              operator: ">="
+              value: "today - 1 month"
+              value_tsql: "DATEADD(month, -1, CAST(GETDATE() AS date))"
+              value_postgres: "(CURRENT_DATE - INTERVAL '1 month')"
+            - pattern: "\\bultimos?\\s+12\\s+meses\\b"
+              operator: ">="
+              value: "today - 12 months"
+              value_tsql: "DATEADD(month, -12, CAST(GETDATE() AS date))"
+              value_postgres: "(CURRENT_DATE - INTERVAL '12 months')"
+            - pattern: "\\bultimo\\s+mes\\b"
+              operator: ">="
+              value: "today - 1 month"
+              value_tsql: "DATEADD(month, -1, CAST(GETDATE() AS date))"
+              value_postgres: "(CURRENT_DATE - INTERVAL '1 month')"
+            - pattern: "\\bthis\\s+year\\b"
+              operator: ">="
+              value: "year_start"
+              value_tsql: "DATEFROMPARTS(YEAR(GETDATE()), 1, 1)"
+              value_postgres: "DATE_TRUNC('year', CURRENT_DATE)"
+            - pattern: "\\beste\\s+ano\\b"
+              operator: ">="
+              value: "year_start"
+              value_tsql: "DATEFROMPARTS(YEAR(GETDATE()), 1, 1)"
+              value_postgres: "DATE_TRUNC('year', CURRENT_DATE)"
+        stop_tokens: # Stopwords del compilador; distintas de sql_solver.filter_value_rules.
+            - ano
+            - a
+            - an
+            - and
+            - average
+            - avg
+            - by
+            - con
+            - cual
+            - cuanto
+            - cuantos
+            - cuantas
+            - count
+            - date
+            - day
+            - de
+            - del
+            - el
+            - en
+            - este
+            - for
+            - in
+            - la
+            - las
+            - los
+            - mean
+            - media
+            - month
+            - numero
+            - of
+            - on
+            - para
+            - periodo
+            - por
+            - promedio
+            - quarter
+            - semana
+            - sum
+            - suma
+            - the
+            - time
+            - to
+            - timestamp
+            - total
+            - ultimas
+            - ultimo
+            - ultimos
+            - with
+            - week
+            - year
+        # -------------------------------------------------------------------
+        # Tokens que indican condicion de estado/ciclo de vida en la query.
+        # Cuando aparecen, las formulas CASE WHEN no se penalizan porque la
+        # pregunta esta pidiendo explicitamente un subconjunto de estado.
+        # -------------------------------------------------------------------
+        status_hint_tokens:
+            - active
+            - activo
+            - activos
+            - approved
+            - aprobada
+            - aprobadas
+            - aprobado
+            - aprobados
+            - cancelled
+            - anulado
+            - anulada
+            - anuladas
+            - anulados
+            - closed
+            - creada
+            - creadas
+            - delivered
+            - ejecucion
+            - entregada
+            - entregadas
+            - inactive
+            - enviada
+            - enviadas
+            - enviado
+            - enviados
+            - lost
+            - open
+            - pending
+            - pendiente
+            - pendientes
+            - perdida
+            - perdidas
+            - perdido
+            - perdidos
+            - proceso
+            - rechazada
+            - rechazadas
+            - rechazado
+            - rechazados
+            - rejected
+            - vigente
+            - vigentes
+        # -------------------------------------------------------------------
+        # Tipos de columna considerados temporales.
+        # Se usan para detectar campos candidatos a time_filter cuando la
+        # entidad base no declara explicitamente un time_field.
+        # -------------------------------------------------------------------
+        temporal_type_hints:
+            - date
+            - datetime
+            - time
+            - timestamp
+        # -------------------------------------------------------------------
+        # Frases que indican que un semantic_model tiene joins no
+        # deterministicos o referenciales y no debe compilarse sin cuidado.
+        # -------------------------------------------------------------------
+        model_warning_tokens:
+            - advertencia
+            - warning
+            - no generar join
+            - no generar joins
+            - no tiene fks
+            - sin fks formales
+            - no deterministic
+            - no deterministico
+            - no-deterministico
+            - referencial
+        # -------------------------------------------------------------------
+        # Tipos de datos numericos usados por la heuristica de lookup.
+        # Una tabla sin FKs propias y con columnas solo de estos tipos tiende a
+        # comportarse como catalogo.
+        # -------------------------------------------------------------------
+        lookup_numeric_type_hints:
+            - int
+            - integer
+            - bigint
+            - smallint
+            - tinyint
+            - decimal
+            - numeric
+            - float
+            - real
+            - double
+            - money
+        # -------------------------------------------------------------------
+        # Tipos de datos temporales usados por la heuristica de lookup.
+        # Si una tabla pequena tiene columnas temporales no es un catalogo puro.
+        # -------------------------------------------------------------------
+        lookup_temporal_type_hints:
+            - date
+            - datetime
+            - time
+            - timestamp
+        # -------------------------------------------------------------------
+        # Umbrales de la heuristica de lookup.
+        # Una tabla sin FKs propias con pocas columnas y pocas columnas
+        # numericas no-PK se clasifica como catalogo.
+        # -------------------------------------------------------------------
+        lookup_column_count_max: 4
+        lookup_max_numeric_columns: 1
+        lookup_identifier_column_names:
+            - id
+        lookup_identifier_suffixes:
+            - _id
+        # Pesos declarativos usados al puntuar metricas candidatas.
+        metric_scoring:
+            compatibility_weight: 2.0
+            embedding_weight: 0.5
+            measure_overlap_weight: 3.0
+            hinted_entity_boost: 1.5
+            source_table_hint_boost: 1.0
+            count_distinct_bonus: 1.25
+            post_aggregated_count_bonus: 0.75
+            total_metric_name_bonus: 0.6
+            ratio_not_requested_penalty: -2.25
+            missing_state_filter_penalty: -1.5
+            state_filter_token_boost: 3.0
+            unexpected_case_when_penalty: -2.5
+        # Pesos heredados cuando un ejemplo curado inyecta activos relacionados.
+        example_expansion:
+            inherited_embedding_weight: 0.80
+            inherited_rerank_weight: 0.70
+        # Heuristica declarativa para escoger una dimension legible en rankings
+        # cuando la query nombra la entidad pero no el campo exacto.
+        ranking_dimension_preference:
+            positive_token_weights:
+                display: 4.0
+                label: 4.0
+                nombre: 3.0
+                name: 3.0
+                title: 3.0
+                titulo: 3.0
+                descripcion: 3.0
+                description: 3.0
+                razon: 2.5
+                social: 1.5
+                fantasia: 1.0
+                codigo: 2.0
+                code: 2.0
+                numero: 2.0
+                number: 2.0
+                folio: 2.0
+            negative_tokens:
+                - estado
+                - status
+                - tipo
+                - type
+                - fecha
+                - date
+                - time
+                - hora
+                - giro
+                - pais
+                - country
+                - region
+                - comuna
+                - linea
+                - moneda
+                - origen
+                - incoterm
+                - condicion
+                - payment
+            negative_token_penalty: 1.5
+            string_type_hints:
+                - string
+                - text
+            string_type_bonus: 2.0
+            entity_prefix_bonus: 0.5
+            same_table_bonus: 1.5
+        synonym_scoring:
+            exact_phrase_strength: 1.0
+            single_token_exact_strength: 0.95
+            single_token_prefix_strength: 0.65
+            multi_token_full_strength: 0.90
+            multi_token_partial_strength: 0.55
+            prefix_min_token_length: 4
+            multi_token_partial_min_tokens: 3
+            entity_direct_confidence_multiplier: 0.75
+            model_related_multiplier: 0.75
+            max_related_boost_multiplier: 2.0
+            plural_suffix_rules:
+                - suffix: z
+                  replacement: ces
+                  min_length: 1
+                - suffix: a
+                  replacement: as
+                  min_length: 4
+                - suffix: e
+                  replacement: es
+                  min_length: 4
+                - suffix: i
+                  replacement: is
+                  min_length: 4
+                - suffix: o
+                  replacement: os
+                  min_length: 4
+                - suffix: u
+                  replacement: us
+                  min_length: 4
+                - suffix: ""
+                  replacement: es
+                  min_length: 4
+                - suffix: ""
+                  replacement: s
+                  min_length: 1
+        metric_phrase_scoring:
+            exact_query_score: 4.0
+            containment_score: 2.5
+            exact_example_score: 6.0
+        entity_matching:
+            alias_exact_score: 1.0
+            alias_containment_score: 0.85
+        field_matching:
+            phrase_contains_bonus: 0.5
+        time_field_scoring:
+            base_score: 1.0
+            entity_match_bonus: 1.0
+            temporal_type_bonus: 1.0
+            temporal_name_bonus: 0.5
+            temporal_name_terms:
+                - fecha
+                - date
+                - time
+                - periodo
+        semantic_model_scoring:
+            compatibility_weight: 2.0
+            embedding_weight: 0.25
+            grain_table_bonus: 4.0
+            core_table_bonus: 2.0
+            group_table_overlap_weight: 0.5
+            warning_penalty: 5.0
+        confidence_scoring:
+            base_score: 0.15
+            measure_bonus: 0.30
+            group_by_bonus: 0.15
+            ranking_bonus: 0.10
+            time_filter_bonus: 0.10
+            post_aggregation_bonus: 0.10
+            semantic_model_bonus: 0.10
+            join_path_or_scalar_bonus: 0.10
+            warning_penalty_per_item: 0.06
+            warning_penalty_cap: 0.35
+            unmapped_qualifier_penalty: 0.18
+        # Limites de seleccion final del compilador semantico.
+        # ranking_default_limit aqui decide cuantos grupos pedir al compilar el plan;
+        # el campo homonimo del solver decide el LIMIT/TOP por defecto del SQL final.
+        selection_tuning:
+            ranking_default_limit: 10
+            measure_candidate_limit: 4
+        post_aggregation:
+            default_functions:
+                avg: avg
+                sum: sum
+                ratio: ratio
+            ratio_function: ratio
+            over: grouped_measure
+            missing_group_by_warning: post_aggregation_requires_group_by
+        plan_fallbacks:
+            base_entity: unknown
+            base_table: unknown
+            population_scope_default: active_entities_only
+            population_scope_warning: population_scope_defaulted_to_active_entities_only
+        asset_text_formatting:
+            body_keys:
+                - description
+                - business_definition
+                - note
+                - rule
+                - impact
+                - meaning
+                - question
+            scalar_keys:
+                - entity
+                - source_table
+                - source
+                - type
+                - formula
+                - key
+                - field
+                - from
+                - to
+                - cardinality
+                - model
+            list_keys:
+                - core_tables
+                - grain
+                - synonyms
+                - tables
+                - dimensions
+                - metrics
+                - applies_to
+        semantic_example_selection:
+            exact_match_bonus: 5.0
+            containment_bonus: 2.0
+
+    # Tuning tecnico del verificador semantico local.
+    # Nota de alcance: estos limites compactan solo el prompt del verifier.
+    # Los nombres repetidos bajo sql_solver.generation_tuning compactan el prompt
+    # del generador SQL y se validan con otro modelo tipado.
+    verification:
+        # Margen reservado durante el preflight de tokens del verifier.
+        prompt_token_safety_margin: 64
+        # Cantidad maxima de tablas en el payload rico del verifier.
+        max_tables_rich: 8
+        # Cantidad maxima de tablas cuando el verifier usa payload ajustado.
+        max_tables_tight: 6
+        # Cantidad maxima de tablas en el payload minimo del verifier.
+        max_tables_minimal: 4
+        # Columnas por tabla en el payload rico del verifier semantico.
+        max_columns_per_table_rich: 10
+        # Columnas por tabla en el payload ajustado del verifier semantico.
+        max_columns_per_table_tight: 6
+        # Columnas por tabla en el payload minimo del verifier semantico.
+        max_columns_per_table_minimal: 4
+        # Caracteres maximos de formula de metrica en payload rico.
+        measure_formula_chars_rich: 180
+        # Caracteres maximos de formula de metrica en payload minimo.
+        measure_formula_chars_minimal: 96
+        # FKs serializadas por tabla cuando el verifier recibe esquema rico.
+        schema_foreign_key_limit_rich: 6
+        # Warnings maximos incluidos desde el plan compilado.
+        max_warnings: 6
+        # Aristas maximas de join incluidas para validar rutas.
+        max_join_edges: 8
+        # Caracteres maximos por pregunta de ejemplo few-shot.
+        example_question_chars: 140
+        # Metricas maximas por ejemplo few-shot del verifier.
+        example_metric_limit: 3
+        # Dimensiones maximas por ejemplo few-shot del verifier.
+        example_dimension_limit: 3
+        # Bonus fuerte para reparar planes que conservan la misma medida.
+        repair_measure_match_bonus: 100.0
+        # Peso de solapamiento de group_by durante reparacion semantica.
+        repair_group_by_overlap_weight: 15.0
+        # Peso de solapamiento de tablas de join durante reparacion semantica.
+        repair_join_table_overlap_weight: 6.0
+        # Bonus por conservar la misma intencion de query durante reparacion.
+        repair_same_intent_bonus: 2.0
+        # Bonus menor por conservar la misma medida textual durante reparacion.
+        repair_same_measure_bonus: 1.0
+        # Repairabilities que permiten intentar reparacion semantica local.
+        recoverable_repairabilities:
+            - medium
+            - high
+        # Clases de falla que deben abortar sin reparacion automatica.
+        non_recoverable_failure_classes:
+            - invalid_contract
+            - insufficient_context
+            - non_recoverable
+            - unsafe_sql
+
+# ============================================================
+# 3. SQL SOLVER
+# Config interna de prompts y reglas lexicas del generador SQL.
+# ============================================================
+
+sql_solver:
+    # Prompt de generacion SQL y contrato textual que debe obedecer el LLM.
+    prompts:
+        spec_generation:
+            system_prompt: |
+                Convert a validated SemanticPlan into a final SQL statement in $dialect.
+
+                Hard rules:
+                - Use only tables and columns from pruned_schema.
+                - Use the SemanticPlan join_path as the canonical route when it exists.
+                - Do not invent relationships outside the join_path or the visible foreign keys in pruned_schema.
+                - Do not sum multi-currency amounts without explicit normalization.
+                - Respect any hard-join blacklist listed in BusinessRules.
+                - For derived metrics or post_aggregation != none, you MUST use a CTE (WITH ... AS) or a subquery.
+                - For derived metrics, the inner CTE/subquery MUST produce one row for each value in base_group_by.
+                - If base_group_by is not [], the inner CTE/subquery MUST include GROUP BY base_group_by even when the outer SELECT is scalar.
+                - It is invalid to generate `SELECT AVG(...) FROM (SELECT COUNT(...) FROM ... WHERE ...) subquery` if the inner subquery does not include GROUP BY base_group_by.
+                - The outer query applies post_aggregation (AVG/SUM/RANK/etc) over the inner alias.
+                - Do not use window functions over aggregates (for example AVG(COUNT(...)) OVER) in the same SELECT; route them through a CTE with GROUP BY instead.
+                - If post_aggregation=avg over a count-based base metric, cast the inner alias using AVG(CAST(count_alias AS DECIMAL(18,2))) to avoid integer truncation.
+                - If the final query does not group in the outer SELECT, final_group_by must be [].
+                - Every non-aggregated column in the SELECT of a query with GROUP BY must also appear in GROUP BY.
+                - Do not generate DML or DDL. Do not execute SQL.
+                - The final SQL must be syntactically valid in $dialect.
+                - Respond only with a valid JSON object that matches this contract:
+                    $generation_contract_json
+                - Do not add markdown, code fences, comments, or any extra text.
+
+                Required JSON output (single root, with no text outside it):
+                {"final_sql": "<valid $dialect statement>"}
+                ### END_OF_OUTPUT
+            user_prompt_template: |
+                ### Dialect
+                $dialect
+                ### SemanticPlan
+                $semantic_plan_yaml
+                ### SQLShape
+                $sql_shape_yaml
+                ### PrunedSchema
+                $pruned_schema_yaml
+                ### BusinessRules
+                $business_rules_summary
+                ### FewShotExamples
+                $few_shot_examples_yaml
+
+                Use SQLShape as a mandatory structural contract, especially required_shape.
+                If SQLShape.required_shape.inner_query.group_by contains columns, verify that the inner CTE/subquery includes that GROUP BY before writing the final JSON.
+                Return ONLY a valid JSON object for SQLGenerationPayload.
+
+    # Reglas lexicas genericas para extraer valores de filtros.
+    # Este vocabulario funcional se ignora al intentar capturar literales desde
+    # la pregunta del usuario.
+    filter_value_rules:
+        # Stopwords para detectar literales de filtros en el solver.
+        # No comparte alcance con semantic_resolver.compiler_rules.stop_tokens.
+        stop_tokens:
+            - a
+            - al
+            - an
+            - and
+            - ano
+            - anos
+            - by
+            - con
+            - day
+            - de
+            - del
+            - dia
+            - dias
+            - during
+            - durante
+            - e
+            - el
+            - en
+            - entre
+            - for
+            - from
+            - hoy
+            - in
+            - la
+            - las
+            - last
+            - los
+            - mes
+            - meses
+            - month
+            - of
+            - "on"
+            - para
+            - por
+            - semana
+            - semanas
+            - sin
+            - the
+            - this
+            - to
+            - today
+            - ultimo
+            - ultima
+            - ultimas
+            - ultimos
+            - week
+            - year
+        leading_connectors:
+            - con
+            - por
+            - de
+            - del
+            - para
+        separator_patterns:
+            - "="
+            - ":"
+            - "es\\s+"
+            - "igual\\s+a\\s+"
+        bare_value_pattern: "[A-Za-z0-9][A-Za-z0-9_.:/-]*"
+
+    # Tuning operativo del runtime local del solver SQL.
+    # Controla reintentos, contexto, sampling y presupuesto VRAM/offload.
+    runtime_tuning:
+        # Cantidad maxima de reintentos del solver/router cuando una reparacion es posible.
+        max_retries: 1
+        # Precision usada por vLLM al cargar el modelo generador SQL.
+        llm_dtype: bfloat16
+        # Ventana maxima de contexto del modelo solver en tokens.
+        max_model_len: 2048
+        # Tokens reservados para la respuesta JSON con el SQL final.
+        max_tokens: 384
+        # Sampling deterministico para generacion SQL reproducible.
+        temperature: 0.0
+        # Fraccion objetivo de VRAM para el engine vLLM del solver.
+        gpu_memory_utilization: 0.90
+        # Fuerza eager mode para evitar compilacion/cudagraphs en GPUs de 16 GiB.
+        enforce_eager: true
+        # Offload CPU minimo requerido para que XiYanSQL 7B arranque en la RTX 3080 Ti Laptop.
+        cpu_offload_gb: 3.0
+        # Espacio swap de vLLM para manejar picos de memoria durante inferencia.
+        swap_space_gb: 4.0
+        # Si es true, una validacion SQL fallida aborta en vez de devolver diagnosticos.
+        fail_on_validation_error: false
+
+    # Tuning de compactacion de prompt, ejemplos few-shot y reglas de repair.
+    # Estos valores gobiernan el payload enviado al LLM, no el contrato semantico.
+    generation_tuning:
+        # Marca textual que corta la generacion del modelo SQL.
+        end_of_output_marker: "### END_OF_OUTPUT"
+        # Margen reservado durante el preflight de tokens del solver SQL.
+        prompt_token_safety_margin: 64
+        # Limite por defecto para consultas de detalle/listado sin ranking explicito.
+        detail_listing_default_limit: 100
+        # Columnas maximas por tabla en prompts ricos del generador SQL.
+        max_columns_per_table_rich: 8
+        # Columnas maximas por tabla en prompts minimos de fallback del generador SQL.
+        max_columns_per_table_minimal: 5
+        # Cantidad de ejemplos curados incluidos en el prompt rico.
+        default_few_shot_limit: 3
+        # Cantidad de ejemplos curados incluidos en variantes compactas.
+        lean_few_shot_limit: 1
+        # Piso de offload CPU aplicado al retry/runtime aunque el config base sea menor.
+        min_cpu_offload_gb: 3.0
+        # Maximo de metricas por ejemplo few-shot compactado del solver.
+        example_metric_limit: 3
+        # Maximo de dimensiones por ejemplo few-shot compactado del solver.
+        example_dimension_limit: 3
+        # Maximo de filtros por ejemplo few-shot compactado.
+        example_filter_limit: 3
+        # Limite/TOP por defecto que el solver aplica al SQL de ranking final.
+        ranking_default_limit: 10
+        # Cantidad maxima de planes candidatos incluidos en contexto rico.
+        rich_candidate_plan_limit: 4
+        # Cantidad maxima de planes candidatos incluidos en contexto minimo.
+        minimal_candidate_plan_limit: 2
+        # Umbral bajo el cual se incluye contexto semantico adicional para el solver.
+        semantic_context_confidence_threshold: 0.75
+        # Reglas de reparacion estructural aplicadas segun issues de validacion.
+        retry_rules:
+            - issue_codes:
+                  - derived_metric_missing_grouped_subquery
+                  - derived_metric_missing_two_level_query
+              guidance: "- STRUCTURAL_REPAIR: if query_type=derived_metric and base_group_by is not [], the inner CTE/subquery must produce one row per value of base_group_by with a mandatory GROUP BY before applying the outer aggregation. It is invalid to return COUNT/SUM aggregated into a single inner row without GROUP BY."
+
+# ============================================================
+# 4. ORCHESTRATOR
+# Config del prompt narrativo final posterior a la ejecucion SQL.
+# ============================================================
+
+orchestrator:
+    # Prompt para redactar la respuesta final en espanol despues de ejecutar SQL.
+    narrative_prompt:
+        system: |
+            You are a business analyst. You receive the user's original question,
+            the executed SQL, and a summary of the returned rows. Answer in
+            Spanish, briefly, factually, and without inventing columns or metrics.
+        user_template: |
+            Question: {query}
+
+            Executed SQL:
+            {sql}
+
+            Result ({row_count} rows{truncated_marker}):
+            {rows_preview}
+
+            Write the final answer for the user.

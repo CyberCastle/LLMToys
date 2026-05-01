@@ -1,0 +1,330 @@
+schema:
+    tables:
+        entity_a:
+            description: Registro operativo principal del dominio generico.
+            columns:
+                - name: id
+                  type: BIGINT
+                - name: entity_b_version_id
+                  type: BIGINT
+                - name: status_a_id
+                  type: BIGINT
+                - name: created_at
+                  type: DATE
+                - name: amount_total
+                  type: DECIMAL
+                - name: kind
+                  type: VARCHAR
+            primary_keys: [id]
+            foreign_keys:
+                - col: entity_b_version_id
+                  ref_table: entity_b_version
+                  ref_col: id
+                - col: status_a_id
+                  ref_table: status_a
+                  ref_col: id
+        entity_b_version:
+            description: Version intermedia asociada al registro operativo.
+            columns:
+                - name: id
+                  type: BIGINT
+                - name: entity_b_id
+                  type: BIGINT
+                - name: revision
+                  type: INTEGER
+            primary_keys: [id]
+            foreign_keys:
+                - col: entity_b_id
+                  ref_table: entity_b
+                  ref_col: id
+        entity_b:
+            description: Registro comercial generico asociado a una entidad agrupadora.
+            columns:
+                - name: id
+                  type: BIGINT
+                - name: bridge_contact_id
+                  type: BIGINT
+                - name: status_b_id
+                  type: BIGINT
+                - name: requested_at
+                  type: DATE
+            primary_keys: [id]
+            foreign_keys:
+                - col: bridge_contact_id
+                  ref_table: bridge_contact
+                  ref_col: id
+                - col: status_b_id
+                  ref_table: status_b
+                  ref_col: id
+        bridge_contact:
+            description: Tabla puente entre el registro comercial y el sitio agrupador.
+            columns:
+                - name: id
+                  type: BIGINT
+                - name: entity_c_site_id
+                  type: BIGINT
+            primary_keys: [id]
+            foreign_keys:
+                - col: entity_c_site_id
+                  ref_table: entity_c_site
+                  ref_col: id
+        entity_c_site:
+            description: Sitio asociado a la entidad de agrupacion.
+            columns:
+                - name: id
+                  type: BIGINT
+                - name: entity_c_id
+                  type: BIGINT
+            primary_keys: [id]
+            foreign_keys:
+                - col: entity_c_id
+                  ref_table: entity_c
+                  ref_col: id
+        entity_c:
+            description: Entidad agrupadora del dominio generico.
+            columns:
+                - name: id
+                  type: BIGINT
+                - name: display_name
+                  type: VARCHAR
+                - name: segment
+                  type: VARCHAR
+            primary_keys: [id]
+            foreign_keys: []
+        status_a:
+            description: Catalogo de estados del registro operativo.
+            columns:
+                - name: id
+                  type: BIGINT
+                - name: name
+                  type: VARCHAR
+            primary_keys: [id]
+            foreign_keys: []
+        status_b:
+            description: Catalogo de estados del registro comercial.
+            columns:
+                - name: id
+                  type: BIGINT
+                - name: name
+                  type: VARCHAR
+            primary_keys: [id]
+            foreign_keys: []
+semantic_contract:
+    business_invariants:
+        semantic_models:
+            - name: model_alpha
+              core_tables:
+                  - entity_a
+                  - entity_b_version
+                  - entity_b
+                  - bridge_contact
+                  - entity_c_site
+                  - entity_c
+                  - status_a
+            - name: model_beta
+              core_tables:
+                  - entity_b
+                  - bridge_contact
+                  - entity_c_site
+                  - entity_c
+                  - status_b
+        semantic_entities:
+            - name: entity_a
+              business_definition: Registro operativo base de la medida generica.
+              source_table: entity_a
+              key: entity_a.id
+            - name: entity_b
+              business_definition: Registro comercial generico asociado a la entidad agrupadora.
+              source_table: entity_b
+              key: entity_b.id
+            - name: entity_c
+              business_definition: Entidad agrupadora del dominio generico.
+              source_table: entity_c
+              key: entity_c.id
+            - name: status_a
+              business_definition: Estado operativo del registro base.
+              source_table: status_a
+              key: status_a.id
+            - name: status_b
+              business_definition: Estado del registro comercial.
+              source_table: status_b
+              key: status_b.id
+        semantic_dimensions:
+            - name: entity_a_created_at
+              entity: entity_a
+              source: entity_a.created_at
+              type: datetime
+            - name: entity_c_label
+              entity: entity_c
+              source: entity_c.display_name
+              type: string
+            - name: status_a_name
+              entity: status_a
+              source: status_a.name
+              type: string
+            - name: entity_a_kind
+              entity: entity_a
+              source: entity_a.kind
+              type: string
+        semantic_metrics:
+            - name: metric_count_a_active
+              entity: entity_a
+              formula: count_distinct(case when status_a.name = 'Active' then entity_a.id end)
+            - name: metric_count_a
+              entity: entity_a
+              formula: count_distinct(entity_a.id)
+            - name: metric_count_b_lost
+              entity: entity_b
+              formula: count_distinct(case when status_b.name = 'Archived' then entity_b.id end)
+              synonyms:
+                  - registros b archivados
+                  - registros b descartados
+            - name: metric_count_b
+              entity: entity_b
+              formula: count_distinct(entity_b.id)
+            - name: metric_ratio_b_lost
+              entity: entity_b
+              formula: metric_count_b_lost / nullif(metric_count_b, 0)
+            - name: metric_count_c
+              entity: entity_c
+              formula: count_distinct(entity_c.id)
+            - name: metric_amount_a
+              entity: entity_a
+              formula: sum(entity_a.amount_total)
+        semantic_filters:
+            - name: by_entity_c
+              field: entity_c.id
+        semantic_business_rules: []
+        semantic_relationships:
+            - from: entity_c_site.entity_c_id
+              to: entity_c.id
+            - from: bridge_contact.entity_c_site_id
+              to: entity_c_site.id
+            - from: entity_b.bridge_contact_id
+              to: bridge_contact.id
+            - from: entity_b.status_b_id
+              to: status_b.id
+            - from: entity_b_version.entity_b_id
+              to: entity_b.id
+            - from: entity_a.entity_b_version_id
+              to: entity_b_version.id
+            - from: entity_a.status_a_id
+              to: status_a.id
+        semantic_constraints: []
+        semantic_join_paths:
+            - name: entity_c_to_a_via_b
+              from_entity: entity_c
+              to_entity: entity_a
+              path:
+                  - entity_c.id = entity_c_site.entity_c_id
+                  - entity_c_site.id = bridge_contact.entity_c_site_id
+                  - bridge_contact.id = entity_b.bridge_contact_id
+                  - entity_b.id = entity_b_version.entity_b_id
+                  - entity_b_version.id = entity_a.entity_b_version_id
+            - name: entity_c_to_b_via_site
+              from_entity: entity_c
+              to_entity: entity_b
+              path:
+                  - entity_c.id = entity_c_site.entity_c_id
+                  - entity_c_site.id = bridge_contact.entity_c_site_id
+                  - bridge_contact.id = entity_b.bridge_contact_id
+        semantic_derived_metrics:
+            - name: metric_avg_a_per_c
+              base_measure: metric_count_a
+              base_group_by:
+                  - entity_c.id
+              post_aggregation: avg
+              join_path_hint: entity_c_to_a_via_b
+            - name: metric_avg_a_active_per_c
+              base_measure: metric_count_a_active
+              base_group_by:
+                  - entity_c.id
+              post_aggregation: avg
+              join_path_hint: entity_c_to_a_via_b
+            - name: metric_avg_b_lost_per_c
+              base_measure: metric_count_b_lost
+              base_group_by:
+                  - entity_c.id
+              post_aggregation: avg
+              join_path_hint: entity_c_to_b_via_site
+            - name: metric_balance_a
+              base_measure: entity_a.amount_total - coalesce(sum(entity_b.id), 0)
+              base_group_by:
+                  - entity_a.id
+                  - entity_a.amount_total
+              post_aggregation: sum
+              join_path_hint: entity_c_to_a_via_b
+    retrieval_heuristics:
+        semantic_synonyms:
+            entity_a:
+                - EA
+                - EAs
+                - entidad_a
+            entity_c:
+                - agrupador
+                - grupo
+            entity_b:
+                - entidad_b
+        query_forms:
+            - name: ranking_dimension_by_measure_desc
+              description: Rankea una dimension por una medida descendente.
+              intent: ranking
+              patterns:
+                  - "\\btop\\s+(?P<limit>\\d+)\\s+de\\s+(?P<dimension>.+?)\\s+con\\s+mas\\s+(?P<measure>.+?)(?:\\s+en\\s+(?P<time>.+))?$"
+                  - "\\branking\\s+de\\s+(?P<dimension>.+?)\\s+por\\s+(?P<measure>.+?)(?:\\s+en\\s+(?P<time>.+))?$"
+              output:
+                  sort_direction: desc
+                  default_limit: 10
+            - name: ranking_dimension_by_measure_asc
+              description: Rankea una dimension por una medida ascendente.
+              intent: ranking
+              patterns:
+                  - "\\btop\\s+(?P<limit>\\d+)\\s+de\\s+(?P<dimension>.+?)\\s+con\\s+menos\\s+(?P<measure>.+?)(?:\\s+en\\s+(?P<time>.+))?$"
+              output:
+                  sort_direction: asc
+                  default_limit: 10
+        semantic_examples:
+            - question: cual es el promedio de entidades_a con estado activo por entidad_c en el ultimo ano?
+              model: model_alpha
+              metrics:
+                  - metric_count_a_active
+                  - metric_amount_a
+              dimensions:
+                  - entity_c_label
+                  - status_a_name
+                  - entity_a_created_at
+            - question: cuantas entidades_a activas existen y cual es su monto agregado?
+              model: model_alpha
+              metrics:
+                  - metric_count_a_active
+                  - metric_amount_a
+              dimensions:
+                  - status_a_name
+                  - entity_a_kind
+                  - entity_c_label
+            - question: top 5 de entity_c con mas entity_a en el ultimo ano
+              model: model_alpha
+              intent: ranking
+              metrics:
+                  - metric_count_a
+              dimensions:
+                  - entity_c_label
+                  - entity_a_created_at
+              expected_metric: metric_count_a
+              expected_dimensions:
+                  - entity_c_label
+              expected_time_filter:
+                  field: entity_a.created_at
+                  value: today - 1 year
+              expected_sort:
+                  field: metric_count_a
+                  direction: desc
+              expected_limit: 5
+    sql_safety:
+        execution_safety:
+            forbidden_keywords:
+                - DROP
+                - DELETE
+                - UPDATE
+        hard_join_blacklist: []
+        semantic_sql_business_rules: []
