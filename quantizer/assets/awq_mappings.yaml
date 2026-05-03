@@ -1,0 +1,65 @@
+qwen2:
+    mappings:
+        - smooth_layer: "re:.*input_layernorm$"
+          target_layers: ["re:.*q_proj$", "re:.*k_proj$", "re:.*v_proj$"]
+        - smooth_layer: "re:.*v_proj$"
+          target_layers: ["re:.*o_proj$"]
+        - smooth_layer: "re:.*post_attention_layernorm$"
+          target_layers: ["re:.*gate_proj$", "re:.*up_proj$"]
+        - smooth_layer: "re:.*up_proj$"
+          target_layers: ["re:.*down_proj$"]
+
+qwen3:
+    mappings:
+        - smooth_layer: "re:.*input_layernorm$"
+          target_layers: ["re:.*q_proj$", "re:.*k_proj$", "re:.*v_proj$"]
+        - smooth_layer: "re:.*v_proj$"
+          target_layers: ["re:.*o_proj$"]
+        - smooth_layer: "re:.*post_attention_layernorm$"
+          target_layers: ["re:.*gate_proj$", "re:.*up_proj$"]
+        - smooth_layer: "re:.*up_proj$"
+          target_layers: ["re:.*down_proj$"]
+
+llama:
+    mappings:
+        - smooth_layer: "re:.*input_layernorm$"
+          target_layers: ["re:.*q_proj$", "re:.*k_proj$", "re:.*v_proj$"]
+        - smooth_layer: "re:.*v_proj$"
+          target_layers: ["re:.*o_proj$"]
+        - smooth_layer: "re:.*post_attention_layernorm$"
+          target_layers: ["re:.*gate_proj$", "re:.*up_proj$"]
+        - smooth_layer: "re:.*up_proj$"
+          target_layers: ["re:.*down_proj$"]
+
+mistral:
+    mappings:
+        - smooth_layer: "re:.*input_layernorm$"
+          target_layers: ["re:.*q_proj$", "re:.*k_proj$", "re:.*v_proj$"]
+        - smooth_layer: "re:.*v_proj$"
+          target_layers: ["re:.*o_proj$"]
+        - smooth_layer: "re:.*post_attention_layernorm$"
+          target_layers: ["re:.*gate_proj$", "re:.*up_proj$"]
+        - smooth_layer: "re:.*up_proj$"
+          target_layers: ["re:.*down_proj$"]
+
+gemma2:
+    mappings:
+        - smooth_layer: "re:.*input_layernorm$"
+          target_layers: ["re:.*q_proj$", "re:.*k_proj$", "re:.*v_proj$"]
+        - smooth_layer: "re:.*v_proj$"
+          target_layers: ["re:.*o_proj$"]
+        - smooth_layer: "re:.*post_attention_layernorm$"
+          target_layers: ["re:.*gate_proj$", "re:.*up_proj$"]
+        - smooth_layer: "re:.*up_proj$"
+          target_layers: ["re:.*down_proj$"]
+
+mixtral:
+    mappings:
+        - smooth_layer: "re:.*input_layernorm$"
+          target_layers: ["re:.*q_proj$", "re:.*k_proj$", "re:.*v_proj$"]
+        - smooth_layer: "re:.*v_proj$"
+          target_layers: ["re:.*o_proj$"]
+        - smooth_layer: "re:.*post_attention_layernorm$"
+          target_layers: ["re:.*gate_proj$", "re:.*up_proj$"]
+        - smooth_layer: "re:.*up_proj$"
+          target_layers: ["re:.*down_proj$"]

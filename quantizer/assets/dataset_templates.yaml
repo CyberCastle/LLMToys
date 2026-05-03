@@ -1,0 +1,26 @@
+"birdsql/bird-critic":
+    text_template: |
+        Dialecto: {dialect}
+        Pregunta: {query}
+        SQL con problema: {issue_sql}
+        SQL corregido: {clean_up_sql?}
+        SQL preprocesado: {preprocess_sql?}
+
+"HuggingFaceH4/ultrachat":
+    messages_template:
+        - role: user
+          content: "{prompt}"
+        - role: assistant
+          content: "{completion}"
+
+"Open-Orca/OpenOrca":
+    messages_template:
+        - role: system
+          content: "{system_prompt?}"
+        - role: user
+          content: "{question}"
+        - role: assistant
+          content: "{response}"
+
+_default:
+    text_field: "text"

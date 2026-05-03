@@ -14,14 +14,18 @@ El caso de uso mas desarrollado actualmente es **NL2SQL**: una tuberia que recib
 
 ## Estructura del repositorio
 
-| Ruta            | Descripcion                                                                                                                                                                      |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `llm_core/`     | Infraestructura comun para cargar y ejecutar modelos locales con vLLM. Incluye registro de modelos, defaults de runtime, utilidades de memoria y conteo/optimizacion de prompts. |
-| `nl2sql/`       | Modulo NL2SQL completo. Contiene pruning semantico, resolver semantico, generador SQL y orquestador. Ver [nl2sql/README.md](nl2sql/README.md).                                   |
-| `etl/`          | Utilidades locales para inspeccionar una base de datos y exportar esquema/datos a artefactos auxiliares.                                                                         |
-| `tests/`        | Suite de pruebas unitarias y de integracion con fixtures genericos.                                                                                                              |
-| `run_model.py`  | Runner simple para probar un modelo local registrado en `llm_core`.                                                                                                              |
-| `run_nl2sql.py` | Runner orquestado: pruning, resolver, solver, ejecucion SQL y narrativa final.                                                                                                   |
+| Ruta                             | Descripcion                                                                                                                                                                      |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `llm_core/`                      | Infraestructura comun para cargar y ejecutar modelos locales con vLLM. Incluye registro de modelos, defaults de runtime, utilidades de memoria y conteo/optimizacion de prompts. |
+| `nl2sql/`                        | Modulo NL2SQL completo. Contiene pruning semantico, resolver semantico, generador SQL y orquestador. Ver [nl2sql/README.md](nl2sql/README.md).                                   |
+| `etl/`                           | Utilidades locales para inspeccionar una base de datos y exportar esquema/datos a artefactos auxiliares.                                                                         |
+| `tools/quantizer/`               | Cuantizador generico AWQ/GPTQ para Causal LMs de Hugging Face. Vive en un subproyecto `uv` aislado y produce artefactos `compressed-tensors` listos para vLLM.                   |
+| `tests/`                         | Suite de pruebas unitarias y de integracion con fixtures genericos.                                                                                                              |
+| `run_model.py`                   | Runner simple para probar un modelo local registrado en `llm_core`.                                                                                                              |
+| `run_semantic_schema_pruning.py` | Runner de la etapa 1 de NL2SQL.                                                                                                                                                  |
+| `run_semantic_resolver.py`       | Runner de la etapa 2 de NL2SQL.                                                                                                                                                  |
+| `run_sql_solver.py`              | Runner de la etapa 3 de NL2SQL.                                                                                                                                                  |
+| `run_nl2sql.py`                  | Runner orquestado: pruning, resolver, solver, ejecucion SQL y narrativa final.                                                                                                   |
 
 Algunas carpetas de datos/configuracion local, como `schema-docs/`, `out/`, `reports/`, `todos/`, `.cache/` y `.venv/`, estan ignoradas por Git porque pueden contener informacion sensible, artefactos generados o datos de entorno.
 
@@ -85,6 +89,18 @@ Ejecutar el flujo NL2SQL completo:
 ```bash
 uv run run_nl2sql.py
 ```
+
+Cuantizar cualquier modelo Hugging Face:
+
+```bash
+QUANTIZER_MODEL_ID=org/mi-modelo \
+QUANTIZER_CALIBRATION_DATASET=org/mi-dataset \
+uv run quantizer/run.py
+```
+
+Las variables del cuantizador, incluyendo `QUANTIZER_MEMORY_PREFLIGHT_MODE`, se documentan en [quantizer/README.md](quantizer/README.md).
+
+Algunos modelos cuantizados con esta utilidad estan publicados en [CyberCastle en Hugging Face](https://huggingface.co/CyberCastle).
 
 Ejecutar pruebas:
 
