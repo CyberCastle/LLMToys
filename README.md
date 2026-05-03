@@ -112,5 +112,4 @@ uv run python -m pytest tests/ -v
 - Los runners son scripts planos con `main()` y `if __name__ == "__main__": main()`.
 - No se usan parsers CLI como `argparse`, `click`, `typer` o similares.
 - Las reglas de dominio, prompts y contratos viven en YAML.
-- Las etapas principales de NL2SQL se comunican mediante artefactos YAML, no por imports cruzados entre modulos de etapa.
-- El codigo generado y los comentarios tecnicos del proyecto se mantienen en espanol cuando aplica.
+- El codigo generado y los comentarios tecnicos del proyecto se mantienen en español cuando aplica.
