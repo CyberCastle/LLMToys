@@ -6,6 +6,7 @@ from __future__ import annotations
 import pytest
 
 from llm_core.vllm_runtime_utils import resolve_gpu_utilization_from_available_memory
+from nl2sql.sql_solver_generator.runtime import resolve_initial_solver_runtime_settings
 from nl2sql.sql_solver_generator.sql_generator import (
     PromptTooLongError,
     require_solver_model_name,
@@ -98,6 +99,21 @@ def test_retry_runtime_interpreta_error_de_vram_de_vllm() -> None:
     assert gpu_memory_utilization < 0.90
     assert enforce_eager is True
     assert cpu_offload_gb == 3.0
+
+
+def test_runtime_inicial_permite_override_del_piso_minimo_de_offload(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SQL_SOLVER_MIN_CPU_OFFLOAD_GB", "0.0")
+    monkeypatch.setattr("nl2sql.sql_solver_generator.runtime.torch.cuda.is_available", lambda: False)
+
+    gpu_memory_utilization, enforce_eager, cpu_offload_gb = resolve_initial_solver_runtime_settings(
+        gpu_memory_utilization=0.90,
+        enforce_eager=True,
+        cpu_offload_gb=0.0,
+    )
+
+    assert gpu_memory_utilization == pytest.approx(0.90)
+    assert enforce_eager is True
+    assert cpu_offload_gb == pytest.approx(0.0)
 
 
 def test_solver_prompt_variant_reduce_few_shots_si_preflight_falla(

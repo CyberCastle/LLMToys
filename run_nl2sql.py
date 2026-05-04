@@ -33,6 +33,7 @@ load_dotenv()
 from nl2sql.config import load_nl2sql_runtime_bundle
 from nl2sql.orchestrator import NL2SQLConfig, NL2SQLRequest, run_nl2sql_batch
 from nl2sql.orchestrator.reporting import render_nl2sql_response, serialize_nl2sql_response
+from nl2sql.sql_solver_generator.config import DEFAULT_MODEL as DEFAULT_SQL_SOLVER_MODEL
 
 # =====================================================================
 # INPUTS
@@ -66,6 +67,66 @@ OUT_DIR: str = os.getenv("NL2SQL_OUT_DIR", "out")  # Directorio base donde se pe
 DIALECT: str = os.getenv("NL2SQL_DIALECT", "tsql")  # tsql | postgres
 EXECUTION_SQL_OPTIMIZATION_ENABLED: bool = False  # Si True, optimiza el SQL final con sqlglot antes de ejecutarlo.
 
+
+# =======================================================================
+# OVERRIDES RUNTIME DEL VERIFICADOR SEMANTICO DEL RESOLVER
+# =======================================================================
+
+# Overrides opcionales del verificador semantico del resolver.
+# Deje `None` para usar el valor por defecto del YAML interno.
+# Perfil base del verificador:
+SEMANTIC_RESOLVER_VERIFIER_MODEL: str = "Qwen/Qwen2.5-7B-Instruct-GPTQ-Int4"
+SEMANTIC_RESOLVER_VERIFIER_DTYPE: str | None = None
+SEMANTIC_RESOLVER_VERIFIER_TEMPERATURE: float | None = None
+SEMANTIC_RESOLVER_VERIFIER_MAX_MODEL_LEN: int | None = None
+SEMANTIC_RESOLVER_VERIFIER_MAX_TOKENS: int | None = None
+SEMANTIC_RESOLVER_VERIFIER_GPU_MEMORY_UTILIZATION: float | None = None
+SEMANTIC_RESOLVER_VERIFIER_CPU_OFFLOAD_GB: float | None = 0.0
+SEMANTIC_RESOLVER_VERIFIER_ENFORCE_EAGER: bool | None = None
+#
+# Perfil cuantizado local GPTQ:
+# SEMANTIC_RESOLVER_VERIFIER_MODEL: str = "out/quantized/XiYanSQL-QwenCoder-7B-2504-W4A16-GPTQ"
+# SEMANTIC_RESOLVER_VERIFIER_DTYPE: str | None = "auto"
+# SEMANTIC_RESOLVER_VERIFIER_TEMPERATURE: float | None = 0.0
+# SEMANTIC_RESOLVER_VERIFIER_MAX_MODEL_LEN: int | None = 2048
+# SEMANTIC_RESOLVER_VERIFIER_MAX_TOKENS: int | None = 256
+# SEMANTIC_RESOLVER_VERIFIER_GPU_MEMORY_UTILIZATION: float | None = 0.90
+# SEMANTIC_RESOLVER_VERIFIER_CPU_OFFLOAD_GB: float | None = 0.0
+# SEMANTIC_RESOLVER_VERIFIER_ENFORCE_EAGER: bool | None = True
+
+# =======================================================================
+# OVERRIDES RUNTIME DEL SOLVER
+# =======================================================================
+
+# Overrides opcionales del runtime del solver.
+# Deje `None` para usar el valor por defecto del YAML interno.
+# SQL_SOLVER_MODEL: str = DEFAULT_SQL_SOLVER_MODEL
+# SQL_SOLVER_LLM_DTYPE: str | None = None
+# SQL_SOLVER_GPU_MEMORY_UTILIZATION: float | None = None
+# SQL_SOLVER_ENFORCE_EAGER: bool | None = None
+# SQL_SOLVER_CPU_OFFLOAD_GB: float | None = None
+# SQL_SOLVER_MIN_CPU_OFFLOAD_GB: float | None = None
+# SQL_SOLVER_SWAP_SPACE_GB: float | None = None
+#
+# Perfil cuantizado local AWQ:
+# SQL_SOLVER_MODEL: str = "out/quantized/XiYanSQL-QwenCoder-7B-2504-W4A16-AWQ"
+# SQL_SOLVER_LLM_DTYPE: str | None = "auto"
+# SQL_SOLVER_GPU_MEMORY_UTILIZATION: float | None = 0.90
+# SQL_SOLVER_ENFORCE_EAGER: bool | None = True
+# SQL_SOLVER_CPU_OFFLOAD_GB: float | None = 0.0
+# SQL_SOLVER_MIN_CPU_OFFLOAD_GB: float | None = 0.0
+# SQL_SOLVER_SWAP_SPACE_GB: float | None = 4.0
+#
+# Perfil cuantizado local GPTQ:
+SQL_SOLVER_MODEL: str = "out/quantized/XiYanSQL-QwenCoder-7B-2504-W4A16-GPTQ"
+SQL_SOLVER_LLM_DTYPE: str | None = "auto"
+SQL_SOLVER_GPU_MEMORY_UTILIZATION: float | None = 0.90
+SQL_SOLVER_ENFORCE_EAGER: bool | None = True
+SQL_SOLVER_CPU_OFFLOAD_GB: float | None = 0.0
+SQL_SOLVER_MIN_CPU_OFFLOAD_GB: float | None = 0.0
+SQL_SOLVER_SWAP_SPACE_GB: float | None = 4.0
+
+
 # =====================================================================
 # SALIDAS
 # =====================================================================
@@ -77,13 +138,102 @@ BATCH_SUMMARY_FILENAME: str = "nl2sql_batch_summary.yaml"
 QUERY_SLUG_MAX_LEN: int = 60
 
 
-def _clean_output_dir(output_dir: str) -> Path:
-    """Elimina y recrea el directorio de salida antes de ejecutar el batch."""
+def _normalize_solver_model_reference(model_reference: str) -> str:
+    """Normaliza una referencia de modelo, resolviendo rutas locales existentes."""
+
+    normalized_reference = model_reference.strip()
+    if not normalized_reference:
+        raise ValueError("SQL_SOLVER_MODEL no puede estar vacio")
+
+    explicit_path = Path(normalized_reference).expanduser()
+    if explicit_path.exists():
+        return str(explicit_path.resolve())
+
+    return normalized_reference
+
+
+def _set_or_clear_env_var(env_key: str, value: object | None) -> None:
+    """Aplica un override explicito del runner o limpia la variable cuando no se usa."""
+
+    if value is None:
+        os.environ.pop(env_key, None)
+        return
+    if isinstance(value, bool):
+        os.environ[env_key] = "true" if value else "false"
+        return
+    os.environ[env_key] = str(value)
+
+
+def _apply_solver_runtime_env_overrides() -> None:
+    """Publica overrides opcionales del runtime del solver para el proceso actual."""
+
+    _set_or_clear_env_var("SQL_SOLVER_LLM_DTYPE", SQL_SOLVER_LLM_DTYPE)
+    _set_or_clear_env_var("SQL_SOLVER_GPU_MEMORY_UTILIZATION", SQL_SOLVER_GPU_MEMORY_UTILIZATION)
+    _set_or_clear_env_var("SQL_SOLVER_ENFORCE_EAGER", SQL_SOLVER_ENFORCE_EAGER)
+    _set_or_clear_env_var("SQL_SOLVER_CPU_OFFLOAD_GB", SQL_SOLVER_CPU_OFFLOAD_GB)
+    _set_or_clear_env_var("SQL_SOLVER_MIN_CPU_OFFLOAD_GB", SQL_SOLVER_MIN_CPU_OFFLOAD_GB)
+    _set_or_clear_env_var("SQL_SOLVER_SWAP_SPACE_GB", SQL_SOLVER_SWAP_SPACE_GB)
+
+
+def _apply_resolver_verifier_env_overrides() -> None:
+    """Publica overrides opcionales del verificador semantico para el proceso actual."""
+
+    _set_or_clear_env_var("SEMANTIC_RESOLVER_VERIFIER_DTYPE", SEMANTIC_RESOLVER_VERIFIER_DTYPE)
+    _set_or_clear_env_var("SEMANTIC_RESOLVER_VERIFIER_TEMPERATURE", SEMANTIC_RESOLVER_VERIFIER_TEMPERATURE)
+    _set_or_clear_env_var("SEMANTIC_RESOLVER_VERIFIER_MAX_MODEL_LEN", SEMANTIC_RESOLVER_VERIFIER_MAX_MODEL_LEN)
+    _set_or_clear_env_var("SEMANTIC_RESOLVER_VERIFIER_MAX_TOKENS", SEMANTIC_RESOLVER_VERIFIER_MAX_TOKENS)
+    _set_or_clear_env_var(
+        "SEMANTIC_RESOLVER_VERIFIER_GPU_MEMORY_UTILIZATION",
+        SEMANTIC_RESOLVER_VERIFIER_GPU_MEMORY_UTILIZATION,
+    )
+    _set_or_clear_env_var("SEMANTIC_RESOLVER_VERIFIER_CPU_OFFLOAD_GB", SEMANTIC_RESOLVER_VERIFIER_CPU_OFFLOAD_GB)
+    _set_or_clear_env_var("SEMANTIC_RESOLVER_VERIFIER_ENFORCE_EAGER", SEMANTIC_RESOLVER_VERIFIER_ENFORCE_EAGER)
+
+
+def _resolve_preserved_output_entry(output_dir: str, solver_model_reference: str) -> str | None:
+    """Detecta si el modelo del solver vive dentro de `output_dir` y preserva su carpeta raiz."""
+
+    output_path = Path(output_dir).expanduser()
+
+    solver_model_path = Path(solver_model_reference).expanduser()
+    if not solver_model_path.exists():
+        return None
+
+    try:
+        relative_model_path = solver_model_path.resolve().relative_to(output_path.resolve())
+    except ValueError:
+        return None
+
+    if relative_model_path.parts:
+        return relative_model_path.parts[0]
+    return None
+
+
+def _resolve_preserved_output_entries(output_dir: str, *model_references: str) -> set[str]:
+    """Calcula las carpetas raiz dentro de `out/` que deben preservarse."""
+
+    preserved_entries: set[str] = set()
+    for model_reference in model_references:
+        preserved_entry = _resolve_preserved_output_entry(output_dir, model_reference)
+        if preserved_entry is not None:
+            preserved_entries.add(preserved_entry)
+    return preserved_entries
+
+
+def _clean_output_dir(output_dir: str, *, preserved_entries: set[str] | None = None) -> Path:
+    """Limpia la salida del batch preservando artefactos locales que no deben borrarse."""
 
     output_path = Path(output_dir)
+    active_preserved_entries = preserved_entries or set()
     if output_path.exists():
         if output_path.is_dir():
-            shutil.rmtree(output_path)
+            for child in output_path.iterdir():
+                if child.name in active_preserved_entries:
+                    continue
+                if child.is_dir():
+                    shutil.rmtree(child)
+                else:
+                    child.unlink()
         else:
             output_path.unlink()
     output_path.mkdir(parents=True, exist_ok=True)
@@ -129,7 +279,23 @@ def main() -> None:
     if not QUERIES:
         raise ValueError("La lista QUERIES esta vacia: agregue al menos una pregunta.")
 
-    base_out = _clean_output_dir(OUT_DIR)
+    resolved_solver_model = _normalize_solver_model_reference(SQL_SOLVER_MODEL)
+    resolved_verifier_model = _normalize_solver_model_reference(SEMANTIC_RESOLVER_VERIFIER_MODEL)
+    os.environ["SQL_SOLVER_MODEL"] = resolved_solver_model
+    os.environ["SEMANTIC_RESOLVER_VERIFIER_MODEL"] = resolved_verifier_model
+    _apply_solver_runtime_env_overrides()
+    _apply_resolver_verifier_env_overrides()
+    print(f"SQL_SOLVER_MODEL: {resolved_solver_model}")
+    print(f"SEMANTIC_RESOLVER_VERIFIER_MODEL: {resolved_verifier_model}")
+
+    base_out = _clean_output_dir(
+        OUT_DIR,
+        preserved_entries=_resolve_preserved_output_entries(
+            OUT_DIR,
+            resolved_solver_model,
+            resolved_verifier_model,
+        ),
+    )
     runtime_bundle = load_nl2sql_runtime_bundle(semantic_rules_path=SEMANTIC_RULES_PATH)
     requests = _build_requests(QUERIES, base_out)
     config = NL2SQLConfig(

@@ -30,7 +30,7 @@ ResolverDialectName = Literal["tsql", "postgres"]
 
 DEFAULT_EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-0.6B"
 DEFAULT_RERANKER_MODEL = "Qwen/Qwen3-Reranker-0.6B"
-DEFAULT_VERIFIER_MODEL = "XGenerationLab/XiYanSQL-QwenCoder-7B-2504"
+DEFAULT_VERIFIER_MODEL = "Qwen/Qwen2.5-7B-Instruct-GPTQ-Int4"
 DEFAULT_SEMANTIC_SECTIONS = (
     "semantic_models",
     "semantic_entities",
@@ -135,6 +135,9 @@ class SemanticResolverConfig:
     rerank_system_prompt: str = ""
     rerank_user_prompt_template: str = ""
     verifier_model: str = field(default_factory=lambda: env_str("SEMANTIC_RESOLVER_VERIFIER_MODEL", DEFAULT_VERIFIER_MODEL))
+    verifier_dtype: EmbeddingDType = field(
+        default_factory=lambda: env_str("SEMANTIC_RESOLVER_VERIFIER_DTYPE", env_str("SEMANTIC_RESOLVER_DTYPE", "auto"))
+    )
     verifier_system_prompt: str = ""
     verifier_user_prompt_template: str = ""
     verifier_temperature: float = field(default_factory=lambda: env_float("SEMANTIC_RESOLVER_VERIFIER_TEMPERATURE", 0.0))
@@ -143,7 +146,7 @@ class SemanticResolverConfig:
     verifier_gpu_memory_utilization: float = field(
         default_factory=lambda: env_float("SEMANTIC_RESOLVER_VERIFIER_GPU_MEMORY_UTILIZATION", 0.82)
     )
-    verifier_cpu_offload_gb: float = field(default_factory=lambda: env_float("SEMANTIC_RESOLVER_VERIFIER_CPU_OFFLOAD_GB", 3.0))
+    verifier_cpu_offload_gb: float = field(default_factory=lambda: env_float("SEMANTIC_RESOLVER_VERIFIER_CPU_OFFLOAD_GB", 0.0))
     verifier_enforce_eager: bool = field(default_factory=lambda: env_bool("SEMANTIC_RESOLVER_VERIFIER_ENFORCE_EAGER", True))
     verifier_few_shot_limit: int | None = None
     max_semantic_repair_attempts: int | None = None

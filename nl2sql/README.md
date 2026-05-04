@@ -633,36 +633,40 @@ Los prompts y reglas internas de `semantic_resolver` se cargan desde el YAML uni
 
 #### Verificador semantico
 
-| Variable                                            | Default                                     | Descripcion                                                                       |
-| --------------------------------------------------- | ------------------------------------------- | --------------------------------------------------------------------------------- |
-| `SEMANTIC_RESOLVER_ENABLE_SEMANTIC_VERIFIER`        | `true`                                      | Activar verificacion LLM del plan.                                                |
-| `SEMANTIC_RESOLVER_VERIFIER_MODEL`                  | `XGenerationLab/XiYanSQL-QwenCoder-7B-2504` | Modelo verificador.                                                               |
-| `SEMANTIC_RESOLVER_VERIFIER_TEMPERATURE`            | `0.0`                                       | Temperatura del verificador.                                                      |
-| `SEMANTIC_RESOLVER_VERIFIER_MAX_MODEL_LEN`          | `2048`                                      | Contexto maximo.                                                                  |
-| `SEMANTIC_RESOLVER_VERIFIER_MAX_TOKENS`             | `256`                                       | Tokens de salida.                                                                 |
-| `SEMANTIC_RESOLVER_VERIFIER_GPU_MEMORY_UTILIZATION` | `0.82`                                      | VRAM del verificador.                                                             |
-| `SEMANTIC_RESOLVER_VERIFIER_CPU_OFFLOAD_GB`         | `3.0`                                       | Offload CPU.                                                                      |
-| `SEMANTIC_RESOLVER_VERIFIER_ENFORCE_EAGER`          | `true`                                      | Forzar modo eager del verificador; `true` desactiva `torch.compile` y cudagraphs. |
-| `SEMANTIC_RESOLVER_VERIFIER_FEW_SHOT_LIMIT`         | `3`                                         | Ejemplos curados maximos en prompt.                                               |
+| Variable                                            | Default                              | Descripcion                                                                       |
+| --------------------------------------------------- | ------------------------------------ | --------------------------------------------------------------------------------- |
+| `SEMANTIC_RESOLVER_ENABLE_SEMANTIC_VERIFIER`        | `true`                               | Activar verificacion LLM del plan.                                                |
+| `SEMANTIC_RESOLVER_VERIFIER_MODEL`                  | `Qwen/Qwen2.5-7B-Instruct-GPTQ-Int4` | Modelo verificador.                                                               |
+| `SEMANTIC_RESOLVER_VERIFIER_DTYPE`                  | `auto`                               | Precision del verificador.                                                        |
+| `SEMANTIC_RESOLVER_VERIFIER_TEMPERATURE`            | `0.0`                                | Temperatura del verificador.                                                      |
+| `SEMANTIC_RESOLVER_VERIFIER_MAX_MODEL_LEN`          | `2048`                               | Contexto maximo.                                                                  |
+| `SEMANTIC_RESOLVER_VERIFIER_MAX_TOKENS`             | `256`                                | Tokens de salida.                                                                 |
+| `SEMANTIC_RESOLVER_VERIFIER_GPU_MEMORY_UTILIZATION` | `0.82`                               | VRAM del verificador.                                                             |
+| `SEMANTIC_RESOLVER_VERIFIER_CPU_OFFLOAD_GB`         | `0.0`                                | Offload CPU.                                                                      |
+| `SEMANTIC_RESOLVER_VERIFIER_ENFORCE_EAGER`          | `true`                               | Forzar modo eager del verificador; `true` desactiva `torch.compile` y cudagraphs. |
+| `SEMANTIC_RESOLVER_VERIFIER_FEW_SHOT_LIMIT`         | `3`                                  | Ejemplos curados maximos en prompt.                                               |
 
 ### `sql_solver_generator`
 
-| Variable                              | Default                                     | Descripcion                                                                             |
-| ------------------------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------- |
-| `SQL_DIALECT`                         | `tsql`                                      | Dialecto de SQL final: `tsql` o `postgres`.                                             |
-| `SQL_SOLVER_MODEL`                    | `XGenerationLab/XiYanSQL-QwenCoder-7B-2504` | Modelo generador SQL.                                                                   |
-| `SQL_SOLVER_MAX_RETRIES`              | `1`                                         | Reintentos con reglas de reparacion.                                                    |
-| `SQL_SOLVER_LLM_DTYPE`                | `bfloat16`                                  | Precision del modelo.                                                                   |
-| `SQL_SOLVER_MAX_MODEL_LEN`            | `2048`                                      | Contexto maximo.                                                                        |
-| `SQL_SOLVER_MAX_TOKENS`               | `384`                                       | Tokens de salida.                                                                       |
-| `SQL_SOLVER_TEMPERATURE`              | `0.0`                                       | Temperatura de generacion.                                                              |
-| `SQL_SOLVER_GPU_MEMORY_UTILIZATION`   | `0.90`                                      | VRAM para vLLM.                                                                         |
-| `SQL_SOLVER_ENFORCE_EAGER`            | `true`                                      | Modo eager para reducir fallos de memoria.                                              |
-| `SQL_SOLVER_CPU_OFFLOAD_GB`           | `3.0`                                       | Offload CPU.                                                                            |
-| `SQL_SOLVER_SWAP_SPACE_GB`            | `4.0`                                       | Swap space vLLM.                                                                        |
-| `SQL_SOLVER_FAIL_ON_VALIDATION_ERROR` | `false`                                     | Si `true`, aborta ante issues de validacion. Recomendado para ejecucion contra BD real. |
+| Variable                              | Default                                     | Descripcion                                                                                                                          |
+| ------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `SQL_DIALECT`                         | `tsql`                                      | Dialecto de SQL final: `tsql` o `postgres`.                                                                                          |
+| `SQL_SOLVER_MODEL`                    | `XGenerationLab/XiYanSQL-QwenCoder-7B-2504` | Modelo generador SQL. Si quiere usar un checkpoint cuantizado local, indique aqui la ruta del modelo.                                |
+| `SQL_SOLVER_MAX_RETRIES`              | `1`                                         | Reintentos con reglas de reparacion.                                                                                                 |
+| `SQL_SOLVER_LLM_DTYPE`                | `bfloat16`                                  | Precision del modelo.                                                                                                                |
+| `SQL_SOLVER_MAX_MODEL_LEN`            | `2048`                                      | Contexto maximo.                                                                                                                     |
+| `SQL_SOLVER_MAX_TOKENS`               | `384`                                       | Tokens de salida.                                                                                                                    |
+| `SQL_SOLVER_TEMPERATURE`              | `0.0`                                       | Temperatura de generacion.                                                                                                           |
+| `SQL_SOLVER_GPU_MEMORY_UTILIZATION`   | `0.90`                                      | VRAM para vLLM.                                                                                                                      |
+| `SQL_SOLVER_ENFORCE_EAGER`            | `true`                                      | Modo eager para reducir fallos de memoria.                                                                                           |
+| `SQL_SOLVER_CPU_OFFLOAD_GB`           | `3.0`                                       | Offload CPU.                                                                                                                         |
+| `SQL_SOLVER_MIN_CPU_OFFLOAD_GB`       | `3.0`                                       | Piso minimo de offload CPU aplicado por el runtime del solver. Puede bajarse a `0.0` para checkpoints cuantizados si la GPU alcanza. |
+| `SQL_SOLVER_SWAP_SPACE_GB`            | `4.0`                                       | Swap space vLLM.                                                                                                                     |
+| `SQL_SOLVER_FAIL_ON_VALIDATION_ERROR` | `false`                                     | Si `true`, aborta ante issues de validacion. Recomendado para ejecucion contra BD real.                                              |
 
 Los prompts y reglas lexicas de `sql_solver_generator` tambien salen del YAML unificado; no hay overrides dedicados por variable de entorno.
+
+Cuando se ejecuta `run_sql_solver.py` o `run_nl2sql.py`, `SQL_SOLVER_MODEL` usa por defecto el repo HF canonico del solver. Si se redefine con una ruta existente, el runner la normaliza a path absoluto antes de instanciar el solver, por ejemplo `out/quantized/XiYanSQL-QwenCoder-7B-2504-W4A16-AWQ`.
 
 ### Narrativa del orquestador
 

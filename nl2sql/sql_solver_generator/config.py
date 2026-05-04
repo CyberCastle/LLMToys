@@ -13,6 +13,9 @@ from nl2sql.config import (
     SqlSolverRuntimeTuning,
     SqlSolverSettings,
     SQLGenerationTuningRules,
+    env_bool,
+    env_float,
+    env_int,
     env_str,
     load_sql_solver_settings,
     resolve_nl2sql_config_path,
@@ -70,17 +73,18 @@ class SolverConfig:
         active_runtime_tuning = self.runtime_tuning or active_settings.runtime_tuning
         if self.runtime_tuning is None:
             object.__setattr__(self, "runtime_tuning", active_runtime_tuning)
-        for field_name in (
-            "max_retries",
-            "llm_dtype",
-            "max_model_len",
-            "max_tokens",
-            "temperature",
-            "gpu_memory_utilization",
-            "enforce_eager",
-            "cpu_offload_gb",
-            "swap_space_gb",
-            "fail_on_validation_error",
-        ):
+        runtime_env_resolvers = {
+            "max_retries": lambda default: env_int("SQL_SOLVER_MAX_RETRIES", default),
+            "llm_dtype": lambda default: env_str("SQL_SOLVER_LLM_DTYPE", default).lower(),
+            "max_model_len": lambda default: env_int("SQL_SOLVER_MAX_MODEL_LEN", default),
+            "max_tokens": lambda default: env_int("SQL_SOLVER_MAX_TOKENS", default),
+            "temperature": lambda default: env_float("SQL_SOLVER_TEMPERATURE", default),
+            "gpu_memory_utilization": lambda default: env_float("SQL_SOLVER_GPU_MEMORY_UTILIZATION", default),
+            "enforce_eager": lambda default: env_bool("SQL_SOLVER_ENFORCE_EAGER", default),
+            "cpu_offload_gb": lambda default: env_float("SQL_SOLVER_CPU_OFFLOAD_GB", default),
+            "swap_space_gb": lambda default: env_float("SQL_SOLVER_SWAP_SPACE_GB", default),
+            "fail_on_validation_error": lambda default: env_bool("SQL_SOLVER_FAIL_ON_VALIDATION_ERROR", default),
+        }
+        for field_name, resolve_from_env in runtime_env_resolvers.items():
             if getattr(self, field_name) is None:
-                object.__setattr__(self, field_name, getattr(active_runtime_tuning, field_name))
+                object.__setattr__(self, field_name, resolve_from_env(getattr(active_runtime_tuning, field_name)))

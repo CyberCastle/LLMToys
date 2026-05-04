@@ -21,6 +21,7 @@ from llm_core.vllm_runtime_utils import (
 )
 from nl2sql.config import (
     SQLGenerationTuningRules,
+    env_float,
     load_sql_solver_generation_tuning_rules,
     resolve_nl2sql_config_path,
 )
@@ -50,6 +51,13 @@ class PromptTooLongError(SharedPromptTooLongError):
     """Error de preflight cuando prompt + salida reservada exceden el contexto."""
 
 
+def resolve_min_cpu_offload_gb() -> float:
+    """Resuelve el piso de offload CPU efectivo del solver con override opcional."""
+
+    tuning_rules = load_generation_tuning_rules()
+    return env_float("SQL_SOLVER_MIN_CPU_OFFLOAD_GB", tuning_rules.min_cpu_offload_gb)
+
+
 def require_solver_model_name(model_name: str) -> str:
     """Valida que el solver tenga un repo/model id utilizable antes de tocar HF/vLLM."""
 
@@ -67,7 +75,7 @@ def resolve_initial_solver_runtime_settings(
 ) -> tuple[float, bool, float]:
     """Ajusta el runtime inicial del solver segun la VRAM libre del momento."""
 
-    tuning_rules = load_generation_tuning_rules()
+    min_cpu_offload_gb = resolve_min_cpu_offload_gb()
     effective_gpu_memory_utilization = gpu_memory_utilization
     if torch.cuda.is_available():
         free_memory_bytes, total_memory_bytes = torch.cuda.mem_get_info()
@@ -86,7 +94,7 @@ def resolve_initial_solver_runtime_settings(
     return (
         effective_gpu_memory_utilization,
         enforce_eager,
-        max(cpu_offload_gb, tuning_rules.min_cpu_offload_gb),
+        max(cpu_offload_gb, min_cpu_offload_gb),
     )
 
 
@@ -99,7 +107,7 @@ def resolve_solver_runtime_retry(
 ) -> tuple[float, bool, float] | None:
     """Calcula un unico reintento cuando vLLM falla por budget de VRAM al iniciar."""
 
-    tuning_rules = load_generation_tuning_rules()
+    min_cpu_offload_gb = resolve_min_cpu_offload_gb()
     match = SOLVER_STARTUP_MEMORY_RE.search(str(error))
     if match is None:
         return None
@@ -117,7 +125,7 @@ def resolve_solver_runtime_retry(
     return (
         retry_gpu_memory_utilization,
         True,
-        max(cpu_offload_gb, tuning_rules.min_cpu_offload_gb),
+        max(cpu_offload_gb, min_cpu_offload_gb),
     )
 
 

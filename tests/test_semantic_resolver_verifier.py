@@ -93,6 +93,7 @@ def test_verify_compiled_plan_inyecta_ejemplos_curados_en_prompt(monkeypatch) ->
     def fake_run_local_verifier_chat(**kwargs):
         captured["system_prompt"] = kwargs["system_prompt"]
         captured["user_prompt"] = kwargs["user_prompt"]
+        captured["dtype"] = kwargs["dtype"]
         return (
             '{"is_semantically_aligned": false, "missing_filters": ["status_a.name = Active"], "confidence": 0.35, "rationale": "Falta el filtro de estado"}',
             {
@@ -117,10 +118,10 @@ def test_verify_compiled_plan_inyecta_ejemplos_curados_en_prompt(monkeypatch) ->
         verifier_user_prompt_template="pregunta={query}\nplan={compiled_plan_yaml}\nejemplos={few_shot_examples_yaml}",
         verifier_few_shot_limit=2,
         verifier_model="fake-verifier",
+        verifier_dtype="float16",
         verifier_temperature=0.0,
         verifier_max_model_len=1024,
         verifier_max_tokens=128,
-        dtype="auto",
         verifier_gpu_memory_utilization=0.5,
         verifier_enforce_eager=True,
         verifier_cpu_offload_gb=0.0,
@@ -143,6 +144,7 @@ def test_verify_compiled_plan_inyecta_ejemplos_curados_en_prompt(monkeypatch) ->
     assert "promedio de entidades_a con estado activo por entidad_c" in captured["user_prompt"]
     assert "metric_count_a_active" in captured["user_prompt"]
     assert "metric_score_trace" not in captured["user_prompt"]
+    assert captured["dtype"] == "float16"
 
 
 def test_verify_compiled_plan_reduce_prompt_cuando_preflight_excede_contexto(
@@ -181,10 +183,10 @@ def test_verify_compiled_plan_reduce_prompt_cuando_preflight_excede_contexto(
         verifier_user_prompt_template="pregunta={query}\nplan={compiled_plan_yaml}\nesquema={pruned_schema_yaml}\nejemplos={few_shot_examples_yaml}",
         verifier_few_shot_limit=2,
         verifier_model="fake-verifier",
+        verifier_dtype="auto",
         verifier_temperature=0.0,
         verifier_max_model_len=256,
         verifier_max_tokens=64,
-        dtype="auto",
         verifier_gpu_memory_utilization=0.5,
         verifier_enforce_eager=True,
         verifier_cpu_offload_gb=0.0,

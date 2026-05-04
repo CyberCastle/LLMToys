@@ -564,7 +564,7 @@ def verify_compiled_plan(
         temperature=config.verifier_temperature,
         max_model_len=config.verifier_max_model_len,
         max_tokens=config.verifier_max_tokens,
-        dtype=config.dtype,
+        dtype=config.verifier_dtype,
         gpu_memory_utilization=config.verifier_gpu_memory_utilization,
         enforce_eager=config.verifier_enforce_eager,
         cpu_offload_gb=config.verifier_cpu_offload_gb,
