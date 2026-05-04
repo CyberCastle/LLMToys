@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from llm_core.vllm_config_gemma4 import Gemma4Runner, MODEL as GEMMA4_MODEL
+from llm_core.vllm_config_gemma4 import Gemma4Runner, MODEL as GEMMA4_MODEL, QUANTIZED_MODEL as GEMMA4_QUANTIZED_MODEL
 from llm_core.vllm_config_gemma4_e4b import Gemma4E4BRunner, MODEL as GEMMA4_E4B_MODEL
 from llm_core.vllm_config_qwen36 import Qwen3Runner, MODEL as QWEN3_MODEL
 from llm_core.vllm_engine import VLLMRuntimeDefaults
@@ -26,6 +26,29 @@ def test_gemma4_runner_configures_base_profile(monkeypatch: pytest.MonkeyPatch) 
     assert cfg.async_scheduling is True
     assert cfg.temperature == pytest.approx(0.7)
     assert cfg.top_k == 50
+
+
+def test_gemma4_runner_promotes_awq_variant_when_bf16_offload_is_not_viable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Gemma 4 26B debe activar su `QuantizedVariant` cuando bf16 no cabe con el presupuesto disponible."""
+
+    monkeypatch.setattr("llm_core.vllm_engine.torch.cuda.is_available", lambda: True)
+    monkeypatch.setattr(
+        "llm_core.vllm_engine.torch.cuda.mem_get_info",
+        lambda: (int(16.0 * (1024**3)), int(16.0 * (1024**3))),
+    )
+    monkeypatch.setattr("llm_core.vllm_engine._get_system_ram_gib", lambda: 10.0)
+
+    runner = Gemma4Runner(runtime_defaults=VLLMRuntimeDefaults(max_tokens=4096))
+    cfg = runner.configure("Sistema", "Usuario")
+
+    assert cfg.model == GEMMA4_QUANTIZED_MODEL
+    assert cfg.tokenizer == GEMMA4_QUANTIZED_MODEL
+    assert cfg.quantization == "compressed-tensors"
+    assert cfg.dtype == "float16"
+    assert cfg.cpu_offload_gb > 0.0
+    assert cfg.disable_hybrid_kv_cache_manager is True
 
 
 def test_qwen3_runner_configures_profile_and_strips_think_blocks(monkeypatch: pytest.MonkeyPatch) -> None:

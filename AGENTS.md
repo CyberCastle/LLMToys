@@ -38,7 +38,7 @@ All model configurations, VRAM budgets, and CPU-offload defaults are calibrated 
 | XiYanSQL-QwenCoder-7B-2504 | 7B              | bf16             | ~11.2 GiB                                  | enforce_eager=True, cpu_offload_gb=3.0, gpu_memory_utilization=0.90, max_model_len=2048, max_tokens=384, stop=["### END_OF_OUTPUT"]                                                                |
 | Gemma-4-E4B                | 4B-class        | AWQ 4-bit / fp16 | ~10.5 GiB storage / ~18 GiB bf16 effective | use `Chunity/gemma-4-E4B-it-AWQ-4bit`, dtype=float16, enforce_eager=True, cpu_offload_gb=0, gpu_memory_utilization=0.82, max_model_len=2048, block_size=64, max_num_seqs=1, async_scheduling=False |
 | Qwen3-30B-A3B (MoE)        | 30B / 3B active | bf16             | fits with AUTO_CPU_OFFLOAD                 | vllm_config_qwen36.py                                                                                                                                                                              |
-| Gemma-4-26B-A4B (MoE)      | 26B / 4B active | bf16             | fits with AUTO_CPU_OFFLOAD                 | vllm_config_gemma4.py                                                                                                                                                                              |
+| Gemma-4-26B-A4B (MoE)      | 26B / 4B active | AWQ 4-bit / bf16 | ~16.0 GiB AWQ / ~52 GiB bf16               | use `cyankiwi/gemma-4-26B-A4B-it-AWQ-4bit`, `quantization="compressed-tensors"`, `dtype=float16`; bf16 still falls back to AUTO_CPU_OFFLOAD in `vllm_config_gemma4.py`                             |
 
 **Do not** introduce models that exceed these constraints without adjusting `cpu_offload_gb`, `gpu_memory_utilization`, `max_model_len`, and `enforce_eager` accordingly. Prefer 0.6B-7B models for pipeline stages; larger MoE models are for `run_model.py` only.
 
@@ -187,7 +187,7 @@ If an NL2SQL tuning table / list / mapping / regex appears in Python and it is n
 - The current contract is `VLLMRuntimeDefaults` + `VLLMModelRunner`; `VLLMDefaults` no longer applies.
 - `vllm_engine.py` is model-agnostic; model-specific behavior lives in `model_registry.py`, runtime profiles, and `vllm_config_*` modules.
 - `prompt_optimizer.py` uses the new contract and requires `llmlingua` for effective compression.
-- `cyankiwi/gemma-4-26B-A4B-it-AWQ-4bit` is no longer supported because it is incompatible with the current vLLM stack.
+- `cyankiwi/gemma-4-26B-A4B-it-AWQ-4bit` is supported again on `vllm 0.20.x` as the `QuantizedVariant` fallback for Gemma 26B; keep `quantization="compressed-tensors"`, `dtype="float16"`, and an `awq_4bit` estimate of about `16.0 GiB`.
 - In `vllm 0.19.x`, `cpu_offload_gb > 0` can break initialization; the builder must force `disable_hybrid_kv_cache_manager=True` when offload is enabled.
 - The final NCCL warning in `run_model.py` with Qwen3 remains open and does not have a clean confirmed workaround from `llm_core`.
 
