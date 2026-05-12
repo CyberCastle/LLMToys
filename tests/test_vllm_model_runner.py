@@ -112,6 +112,40 @@ def test_load_model_retries_with_lower_max_model_len(monkeypatch: pytest.MonkeyP
     assert calls == [4096, "release", 3072]
 
 
+def test_load_tokenizer_respects_runtime_tokenizer_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    """La carga comun debe respetar `tokenizer_mode` para alinear el prompt con vLLM."""
+
+    runner = _BaseRunner()
+    runner.cfg = VLLMConfig(
+        model="mistralai/Ministral-3-8B-Reasoning-2512",
+        tokenizer="mistralai/Ministral-3-8B-Reasoning-2512",
+        gpu_memory_utilization=0.5,
+        max_model_len=64,
+        max_tokens=8,
+        temperature=0.0,
+        top_p=1.0,
+        top_k=1,
+        repetition_penalty=1.0,
+        tokenizer_mode="mistral",
+        trust_remote_code=True,
+        hf_token="secret",
+    )
+    captured: dict[str, object] = {}
+
+    def _fake_load_uncached_tokenizer(**kwargs: object) -> object:
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr("llm_core.vllm_interface.load_uncached_tokenizer", _fake_load_uncached_tokenizer)
+
+    tokenizer = runner.load_tokenizer()
+
+    assert tokenizer is runner._tokenizer
+    assert captured["tokenizer_name"] == "mistralai/Ministral-3-8B-Reasoning-2512"
+    assert captured["tokenizer_mode"] == "mistral"
+    assert captured["hf_token"] == "secret"
+
+
 def test_cleanup_base_clears_state_and_uses_runtime_utils(monkeypatch: pytest.MonkeyPatch) -> None:
     """El cleanup comun debe apagar el engine una vez y liberar estado interno."""
 

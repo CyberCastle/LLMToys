@@ -82,6 +82,7 @@ def test_large_artifacts_fit_safe_context_budgets_across_llm_stages(
             revision=None,
             tokenizer_revision=None,
             trust_remote_code=True,
+            tokenizer_mode="auto",
             max_model_len=512,
         ),
     )

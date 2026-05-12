@@ -222,6 +222,92 @@ def test_plan_memory_selects_quantized_variant_when_bf16_does_not_fit(monkeypatc
     assert plan.cpu_offload_gb > 0.0
 
 
+def test_plan_memory_quantized_variant_fallback_respects_tensor_parallel_size(monkeypatch: pytest.MonkeyPatch) -> None:
+    """El fallback heuristico de una variante cuantizada no debe dividir por TP dos veces."""
+
+    profile = _make_profile(
+        bf16_size=40.0,
+        awq_size=0.0,
+        quantized_variant=QuantizedVariant(
+            model_name="vendor/fake-custom-quant",
+            tokenizer_name="vendor/fake-custom-quant",
+            size_key="custom_4bit",
+            quantization="compressed-tensors",
+        ),
+    )
+    _patch_memory(monkeypatch, free_gib=6.0, total_gib=6.0, ram_available_gib=5.0)
+
+    plan = plan_memory(
+        profile=profile,
+        dtype="bfloat16",
+        gpu_memory_utilization=0.90,
+        quantization=None,
+        tensor_parallel_size=2,
+        auto_quantize=True,
+        auto_cpu_offload=True,
+        ram_reserve_gb=4.0,
+        current_max_model_len=4096,
+    )
+
+    assert plan.model_override == "vendor/fake-custom-quant"
+    assert plan.cpu_offload_gb > 0.0
+
+
+def test_plan_memory_force_quantized_variant_prefers_known_variant(monkeypatch: pytest.MonkeyPatch) -> None:
+    """El flag explicito debe permitir elegir la variante cuantizada aunque bf16 tambien quepa."""
+
+    profile = _make_profile(
+        bf16_size=8.0,
+        awq_size=4.0,
+        quantized_variant=QuantizedVariant(
+            model_name="vendor/fake-awq",
+            tokenizer_name="vendor/fake-awq",
+            quantization="compressed-tensors",
+            dtype="float16",
+        ),
+    )
+    _patch_memory(monkeypatch, free_gib=16.0, total_gib=16.0, ram_available_gib=64.0)
+
+    plan = plan_memory(
+        profile=profile,
+        dtype="bfloat16",
+        gpu_memory_utilization=0.90,
+        quantization=None,
+        tensor_parallel_size=1,
+        auto_quantize=True,
+        force_quantized_variant=True,
+        auto_cpu_offload=True,
+        ram_reserve_gb=4.0,
+        current_max_model_len=4096,
+    )
+
+    assert plan.model_override == "vendor/fake-awq"
+    assert plan.tokenizer_override == "vendor/fake-awq"
+    assert plan.quantization == "compressed-tensors"
+    assert plan.dtype_override == "float16"
+    assert plan.cpu_offload_gb == 0.0
+
+
+def test_plan_memory_force_quantized_variant_requires_profile_support() -> None:
+    """Forzar la variante cuantizada debe fallar si el perfil no define una ruta conocida."""
+
+    profile = _make_profile(bf16_size=8.0, awq_size=0.0, quantized_variant=None)
+
+    with pytest.raises(RuntimeError, match="no define `quantized_variant`"):
+        plan_memory(
+            profile=profile,
+            dtype="bfloat16",
+            gpu_memory_utilization=0.90,
+            quantization=None,
+            tensor_parallel_size=1,
+            auto_quantize=True,
+            force_quantized_variant=True,
+            auto_cpu_offload=True,
+            ram_reserve_gb=4.0,
+            current_max_model_len=4096,
+        )
+
+
 def test_plan_memory_raises_when_auto_quantize_disabled_and_memory_is_insufficient(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

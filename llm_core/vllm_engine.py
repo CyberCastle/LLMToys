@@ -74,6 +74,7 @@ class VLLMRuntimeDefaults:
     num_gpu_blocks_override: int | None = None
     auto_cpu_offload: bool = True
     auto_quantize: bool = True
+    force_quantized_variant: bool = False
     ram_reserve_gb: float = 4.0
 
     max_num_batched_tokens: int | None = None
@@ -406,6 +407,135 @@ def _build_memory_error(
     )
 
 
+def _apply_quantized_variant_overrides(plan: MemoryPlan, quantized_variant: QuantizedVariant) -> None:
+    """Aplica al plan los overrides asociados a una variante cuantizada conocida."""
+
+    plan.model_override = quantized_variant.model_name
+    plan.tokenizer_override = quantized_variant.tokenizer_name
+    plan.quantization = quantized_variant.quantization
+    plan.kernel_backend = quantized_variant.kernel_backend
+    plan.dtype_override = quantized_variant.dtype
+
+
+def _estimate_quantized_weights_per_gpu(
+    *,
+    profile: ModelRuntimeProfile,
+    dtype: str,
+    size_key: str,
+    requested_model_size_gib: float,
+    tensor_parallel_size: int,
+) -> float:
+    """Estima los pesos por GPU de una opcion cuantizada con fallback coherente."""
+
+    quantized_size_gib = estimate_model_size_gib(profile, dtype, size_key)
+    if quantized_size_gib is None:
+        quantized_size_gib = requested_model_size_gib / (3 if profile.is_moe else 4)
+    return quantized_size_gib / tensor_parallel_size
+
+
+def _apply_quantized_fit_to_plan(
+    *,
+    plan: MemoryPlan,
+    weights_per_gpu_gib: float,
+    vram_for_weights_gib: float,
+    existing_cpu_offload_gb: float,
+    ram_for_offload_gib: float,
+    auto_cpu_offload: bool,
+    current_max_model_len: int,
+) -> bool:
+    """Actualiza el plan segun la capacidad real de una opcion cuantizada."""
+
+    fits_variant, suggested_offload, offload_needed = _resolve_variant_fit(
+        weights_per_gpu_gib=weights_per_gpu_gib,
+        vram_for_weights_gib=vram_for_weights_gib,
+        existing_cpu_offload_gb=existing_cpu_offload_gb,
+        ram_for_offload_gib=ram_for_offload_gib,
+        auto_cpu_offload=auto_cpu_offload,
+    )
+    if fits_variant:
+        if suggested_offload > existing_cpu_offload_gb:
+            plan.cpu_offload_gb = suggested_offload
+            plan.enforce_eager = True
+        return True
+
+    plan.cpu_offload_gb = max(existing_cpu_offload_gb, min(offload_needed, ram_for_offload_gib))
+    plan.enforce_eager = True
+    plan.max_model_len = min(current_max_model_len, 2048)
+    return False
+
+
+def _plan_known_quantized_variant(
+    *,
+    plan: MemoryPlan,
+    profile: ModelRuntimeProfile,
+    quantized_variant: QuantizedVariant,
+    dtype: str,
+    requested_model_size_gib: float,
+    tensor_parallel_size: int,
+    vram_for_weights_gib: float,
+    existing_cpu_offload_gb: float,
+    ram_for_offload_gib: float,
+    auto_cpu_offload: bool,
+    current_max_model_len: int,
+    force_selection: bool,
+) -> MemoryPlan:
+    """Planifica una variante cuantizada conocida y registra el motivo de seleccion."""
+
+    _apply_quantized_variant_overrides(plan, quantized_variant)
+    quantized_weights_per_gpu = _estimate_quantized_weights_per_gpu(
+        profile=profile,
+        dtype=dtype,
+        size_key=quantized_variant.size_key,
+        requested_model_size_gib=requested_model_size_gib,
+        tensor_parallel_size=tensor_parallel_size,
+    )
+    fits_quantized_variant = _apply_quantized_fit_to_plan(
+        plan=plan,
+        weights_per_gpu_gib=quantized_weights_per_gpu,
+        vram_for_weights_gib=vram_for_weights_gib,
+        existing_cpu_offload_gb=existing_cpu_offload_gb,
+        ram_for_offload_gib=ram_for_offload_gib,
+        auto_cpu_offload=auto_cpu_offload,
+        current_max_model_len=current_max_model_len,
+    )
+    if fits_quantized_variant:
+        if force_selection:
+            logger.info(
+                "Se fuerza la variante cuantizada %s para %s. pesos_por_gpu≈%.2f GiB, offload≈%.2f GiB.",
+                quantized_variant.model_name,
+                profile.alias,
+                quantized_weights_per_gpu,
+                plan.cpu_offload_gb,
+            )
+        else:
+            logger.info(
+                "Auto-quantize selecciona la variante %s para %s. pesos_por_gpu≈%.2f GiB, offload≈%.2f GiB.",
+                quantized_variant.model_name,
+                profile.alias,
+                quantized_weights_per_gpu,
+                plan.cpu_offload_gb,
+            )
+        return plan
+
+    if force_selection:
+        logger.warning(
+            "Memoria muy ajustada para %s incluso forzando la variante cuantizada %s. offload≈%.2f GiB, max_model_len=%s.",
+            profile.alias,
+            quantized_variant.model_name,
+            plan.cpu_offload_gb,
+            plan.max_model_len,
+        )
+    else:
+        logger.warning(
+            "Memoria muy ajustada para %s incluso con la variante cuantizada %s. offload≈%.2f GiB, max_model_len=%s.",
+            profile.alias,
+            quantized_variant.model_name,
+            plan.cpu_offload_gb,
+            plan.max_model_len,
+        )
+    return plan
+
+
 def plan_memory(
     *,
     profile: ModelRuntimeProfile,
@@ -414,6 +544,7 @@ def plan_memory(
     quantization: str | None,
     tensor_parallel_size: int,
     auto_quantize: bool,
+    force_quantized_variant: bool = False,
     auto_cpu_offload: bool,
     ram_reserve_gb: float,
     current_max_model_len: int,
@@ -422,6 +553,12 @@ def plan_memory(
     """Planifica memoria CPU/GPU para un perfil sin depender del modelo concreto."""
 
     plan = MemoryPlan(quantization=quantization)
+    forced_quantized_variant = profile.quantized_variant if force_quantized_variant else None
+    if force_quantized_variant and forced_quantized_variant is None:
+        raise RuntimeError("No se puede forzar la version cuantizada porque el perfil " f"{profile.alias!r} no define `quantized_variant`.")
+    if forced_quantized_variant is not None:
+        _apply_quantized_variant_overrides(plan, forced_quantized_variant)
+
     if not torch.cuda.is_available():
         return plan
 
@@ -454,6 +591,22 @@ def plan_memory(
         return plan
 
     requested_weights_per_gpu = requested_model_size_gib / tensor_parallel_size
+    if forced_quantized_variant is not None:
+        return _plan_known_quantized_variant(
+            plan=plan,
+            profile=profile,
+            quantized_variant=forced_quantized_variant,
+            dtype=dtype,
+            requested_model_size_gib=requested_model_size_gib,
+            tensor_parallel_size=tensor_parallel_size,
+            vram_for_weights_gib=vram_for_weights,
+            existing_cpu_offload_gb=existing_cpu_offload_gb,
+            ram_for_offload_gib=ram_for_offload,
+            auto_cpu_offload=auto_cpu_offload,
+            current_max_model_len=current_max_model_len,
+            force_selection=True,
+        )
+
     fits_requested_variant, suggested_offload, _offload_needed = _resolve_variant_fit(
         weights_per_gpu_gib=requested_weights_per_gpu,
         vram_for_weights_gib=vram_for_weights,
@@ -498,64 +651,40 @@ def plan_memory(
 
     quantized_variant = profile.quantized_variant
     if quantized_variant is not None:
-        quantized_size_gib = estimate_model_size_gib(profile, dtype, quantized_variant.size_key)
-        if quantized_size_gib is None:
-            quantized_size_gib = requested_weights_per_gpu / (3 if profile.is_moe else 4)
-        quantized_weights_per_gpu = quantized_size_gib / tensor_parallel_size
-        fits_quantized_variant, suggested_quantized_offload, quantized_offload_needed = _resolve_variant_fit(
-            weights_per_gpu_gib=quantized_weights_per_gpu,
+        return _plan_known_quantized_variant(
+            plan=plan,
+            profile=profile,
+            quantized_variant=quantized_variant,
+            dtype=dtype,
+            requested_model_size_gib=requested_model_size_gib,
+            tensor_parallel_size=tensor_parallel_size,
             vram_for_weights_gib=vram_for_weights,
             existing_cpu_offload_gb=existing_cpu_offload_gb,
             ram_for_offload_gib=ram_for_offload,
             auto_cpu_offload=auto_cpu_offload,
+            current_max_model_len=current_max_model_len,
+            force_selection=False,
         )
-        plan.model_override = quantized_variant.model_name
-        plan.tokenizer_override = quantized_variant.tokenizer_name
-        plan.quantization = quantized_variant.quantization
-        plan.kernel_backend = quantized_variant.kernel_backend
-        plan.dtype_override = quantized_variant.dtype
-        if fits_quantized_variant:
-            if suggested_quantized_offload > existing_cpu_offload_gb:
-                plan.cpu_offload_gb = suggested_quantized_offload
-                plan.enforce_eager = True
-            logger.info(
-                "Auto-quantize selecciona la variante %s para %s. pesos_por_gpu≈%.2f GiB, offload≈%.2f GiB.",
-                quantized_variant.model_name,
-                profile.alias,
-                quantized_weights_per_gpu,
-                plan.cpu_offload_gb,
-            )
-            return plan
-
-        plan.cpu_offload_gb = max(existing_cpu_offload_gb, min(quantized_offload_needed, ram_for_offload))
-        plan.enforce_eager = True
-        plan.max_model_len = min(current_max_model_len, 2048)
-        logger.warning(
-            "Memoria muy ajustada para %s incluso con la variante cuantizada %s. offload≈%.2f GiB, max_model_len=%s.",
-            profile.alias,
-            quantized_variant.model_name,
-            plan.cpu_offload_gb,
-            plan.max_model_len,
-        )
-        return plan
 
     fallback_quantization = "fp8" if profile.is_moe else "bitsandbytes"
-    quantized_size_gib = estimate_model_size_gib(profile, dtype, fallback_quantization)
-    if quantized_size_gib is None:
-        quantized_size_gib = requested_weights_per_gpu / (2 if profile.is_moe else 4)
-    quantized_weights_per_gpu = quantized_size_gib / tensor_parallel_size
-    fits_fallback_variant, suggested_fallback_offload, fallback_offload_needed = _resolve_variant_fit(
+    quantized_weights_per_gpu = _estimate_quantized_weights_per_gpu(
+        profile=profile,
+        dtype=dtype,
+        size_key=fallback_quantization,
+        requested_model_size_gib=requested_model_size_gib,
+        tensor_parallel_size=tensor_parallel_size,
+    )
+    plan.quantization = fallback_quantization
+    fits_fallback_variant = _apply_quantized_fit_to_plan(
+        plan=plan,
         weights_per_gpu_gib=quantized_weights_per_gpu,
         vram_for_weights_gib=vram_for_weights,
         existing_cpu_offload_gb=existing_cpu_offload_gb,
         ram_for_offload_gib=ram_for_offload,
         auto_cpu_offload=auto_cpu_offload,
+        current_max_model_len=current_max_model_len,
     )
-    plan.quantization = fallback_quantization
     if fits_fallback_variant:
-        if suggested_fallback_offload > existing_cpu_offload_gb:
-            plan.cpu_offload_gb = suggested_fallback_offload
-            plan.enforce_eager = True
         logger.info(
             "Auto-quantize usara %s para %s. pesos_por_gpu≈%.2f GiB, offload≈%.2f GiB.",
             fallback_quantization,
@@ -565,9 +694,6 @@ def plan_memory(
         )
         return plan
 
-    plan.cpu_offload_gb = max(existing_cpu_offload_gb, min(fallback_offload_needed, ram_for_offload))
-    plan.enforce_eager = True
-    plan.max_model_len = min(current_max_model_len, 2048)
     logger.warning(
         "Memoria muy ajustada para %s con cuantizacion %s. offload≈%.2f GiB, max_model_len=%s.",
         profile.alias,
@@ -609,6 +735,7 @@ def build_vllm_config_from_profile(
         quantization=requested_quantization,
         tensor_parallel_size=runtime_defaults.tensor_parallel_size,
         auto_quantize=runtime_defaults.auto_quantize,
+        force_quantized_variant=runtime_defaults.force_quantized_variant,
         auto_cpu_offload=runtime_defaults.auto_cpu_offload,
         ram_reserve_gb=runtime_defaults.ram_reserve_gb,
         current_max_model_len=requested_max_model_len,

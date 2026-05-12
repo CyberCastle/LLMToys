@@ -45,6 +45,7 @@ class ModelTokenizerSpec:
     revision: str | None
     tokenizer_revision: str | None
     trust_remote_code: bool
+    tokenizer_mode: str
     max_model_len: int
 
 
@@ -105,6 +106,7 @@ def resolve_model_tokenizer_spec(
         revision=resolved_defaults.revision,
         tokenizer_revision=resolved_defaults.tokenizer_revision,
         trust_remote_code=resolved_defaults.trust_remote_code,
+        tokenizer_mode=resolved_defaults.tokenizer_mode,
         max_model_len=max_model_len,
     )
 
@@ -142,6 +144,7 @@ def count_prompt_tokens(
         revision=spec.revision,
         tokenizer_revision=spec.tokenizer_revision,
         trust_remote_code=spec.trust_remote_code,
+        tokenizer_mode=spec.tokenizer_mode,
         hf_token=os.environ.get("HF_TOKEN"),
     )
     return PromptTokenStats(
@@ -298,6 +301,7 @@ def optimize_prompt_schema(
         revision=spec.revision,
         tokenizer_revision=spec.tokenizer_revision,
         trust_remote_code=spec.trust_remote_code,
+        tokenizer_mode=spec.tokenizer_mode,
         hf_token=os.environ.get("HF_TOKEN"),
     )
     original_schema_tokens = count_text_tokens(tokenizer, schema_text)

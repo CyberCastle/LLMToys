@@ -67,6 +67,7 @@ def test_resolve_model_tokenizer_spec_uses_effective_tokenizer_and_context_cap(m
 
     assert spec.model_name == "google/gemma-4-E4B-it"
     assert spec.tokenizer_name == "Chunity/gemma-4-E4B-it-AWQ-4bit"
+    assert spec.tokenizer_mode == "auto"
     assert spec.max_model_len == 2048
 
 
@@ -81,6 +82,7 @@ def test_count_prompt_tokens_handles_batch_encoding(monkeypatch: pytest.MonkeyPa
             revision=None,
             tokenizer_revision=None,
             trust_remote_code=True,
+            tokenizer_mode="auto",
             max_model_len=64,
         ),
     )
@@ -111,6 +113,7 @@ def test_optimize_prompt_schema_compresses_when_needed(monkeypatch: pytest.Monke
             revision=None,
             tokenizer_revision=None,
             trust_remote_code=True,
+            tokenizer_mode="auto",
             max_model_len=14,
         ),
     )

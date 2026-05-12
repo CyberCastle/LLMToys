@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 
 def env_str(env_key: str, default: str) -> str:
@@ -34,3 +35,9 @@ def env_bool(env_key: str, default: bool) -> bool:
 
     default_value = "1" if default else "0"
     return env_str(env_key, default_value).lower() in {"1", "true", "yes", "on"}
+
+
+def env_path(env_key: str, default: str | Path) -> Path:
+    """Lee una ruta del entorno y la normaliza a `Path` sin resolverla."""
+
+    return Path(env_str(env_key, str(default))).expanduser()

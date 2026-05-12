@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-"""Runner concreto para `mistralai/Ministral-3-8B-Reasoning-2512`."""
+"""Runner concreto para `mistralai/Ministral-3-8B-Instruction-2512`."""
 
 from __future__ import annotations
 
@@ -10,11 +10,11 @@ from typing import Any
 from llm_core.vllm_engine import ModelRuntimeProfile, QuantizedVariant, VLLMConfig
 from llm_core.vllm_interface import VLLMModelRunner
 
-MODEL = "mistralai/Ministral-3-8B-Reasoning-2512"
-QUANTIZED_MODEL = "cyankiwi/Ministral-3-8B-Reasoning-2512-AWQ-8bit"
+MODEL = "mistralai/Ministral-3-8B-Instruction-2512"
+QUANTIZED_MODEL = "cyankiwi/Ministral-3-8B-Instruction-2512-AWQ-4bit"
 
 MODEL_PROFILE = ModelRuntimeProfile(
-    alias="ministral3",
+    alias="ministral3i",
     canonical_model_name=MODEL,
     model_name=MODEL,
     temperature=0.7,
@@ -33,11 +33,11 @@ MODEL_PROFILE = ModelRuntimeProfile(
 )
 
 
-class Ministral3Runner(VLLMModelRunner):
+class Ministral3IRunner(VLLMModelRunner):
     """Runner vLLM para Ministral 3 con los overrides requeridos por Mistral."""
 
     def get_model_profile(self) -> ModelRuntimeProfile:
-        """Devuelve el perfil fijo del modelo Ministral 3 8B Reasoning."""
+        """Devuelve el perfil fijo del modelo Ministral 3 8B Instruction."""
 
         return MODEL_PROFILE
 

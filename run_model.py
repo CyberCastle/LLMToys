@@ -15,7 +15,13 @@ from llm_core.vllm_engine import VLLMRuntimeDefaults
 # =====================================================================
 # SELECCIÓN DE MODELO — Cambia esta variable para elegir el modelo
 # =====================================================================
-ACTIVE_MODEL = "gemma4"  # "gemma4" | "gemma4_e4b" | "qwen3" | "ministral3" | "phi4_reasoning"
+ACTIVE_MODEL = "ministral3r"  # "gemma4" | "gemma4_e4b" | "qwen3" | "ministral3i" | "ministral3r" | "phi4_reasoning"
+# =====================================================================
+
+# =====================================================================
+# RUNTIME FLAGS — Overrides puntuales del planner/builder.
+# =====================================================================
+FORCE_QUANTIZED_VARIANT = True  # Forzar el uso de la variante cuantizada del modelo, si el perfil lo soporta.
 # =====================================================================
 
 # =====================================================================
@@ -30,7 +36,10 @@ USER_PROMPT = "Explica qué es un modelo Mixture-of-Experts."
 # Ejemplo:
 #   RUNTIME_DEFAULTS = VLLMRuntimeDefaults(max_model_len=8192, gpu_memory_utilization=0.90)
 # =====================================================================
-RUNTIME_DEFAULTS = VLLMRuntimeDefaults(max_tokens=4096)
+RUNTIME_DEFAULTS = VLLMRuntimeDefaults(
+    max_tokens=4096,
+    force_quantized_variant=FORCE_QUANTIZED_VARIANT,
+)
 # =====================================================================
 
 

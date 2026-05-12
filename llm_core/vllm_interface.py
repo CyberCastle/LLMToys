@@ -24,6 +24,7 @@ from llm_core.vllm_engine import (
     build_vllm_config_from_profile,
     validate_config,
 )
+from llm_core.tokenizer_utils import load_uncached_tokenizer
 from llm_core.vllm_runtime_utils import (
     destroy_distributed_process_group,
     release_cuda_memory,
@@ -71,19 +72,19 @@ class VLLMModelRunner(ABC):
         return cfg
 
     def load_tokenizer(self) -> Any:
-        """Carga el tokenizer efectivo del runner con Hugging Face Transformers."""
-
-        from transformers import AutoTokenizer
+        """Carga el tokenizer efectivo del runner respetando `tokenizer_mode`."""
 
         if self.cfg is None:
             raise RuntimeError("El runner debe configurarse antes de cargar el tokenizer")
 
         tokenizer_name = self.cfg.tokenizer or self.cfg.model
-        self._tokenizer = AutoTokenizer.from_pretrained(
-            tokenizer_name,
-            revision=self.cfg.tokenizer_revision,
+        self._tokenizer = load_uncached_tokenizer(
+            tokenizer_name=tokenizer_name,
+            revision=self.cfg.revision,
+            tokenizer_revision=self.cfg.tokenizer_revision,
             trust_remote_code=self.cfg.trust_remote_code,
-            token=self.cfg.hf_token,
+            tokenizer_mode=self.cfg.tokenizer_mode,
+            hf_token=self.cfg.hf_token,
         )
         return self._tokenizer
 

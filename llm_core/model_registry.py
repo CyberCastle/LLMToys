@@ -44,9 +44,14 @@ MODEL_REGISTRY: dict[str, RegisteredModel] = {
         runner_class="Qwen3Runner",
         model_name="Qwen/Qwen3-30B-A3B",
     ),
-    "ministral3": RegisteredModel(
-        config_module="llm_core.vllm_config_ministral3",
-        runner_class="Ministral3Runner",
+    "ministral3i": RegisteredModel(
+        config_module="llm_core.vllm_config_ministral3I",
+        runner_class="Ministral3IRunner",
+        model_name="mistralai/Ministral-3-8B-Instruction-2512",
+    ),
+    "ministral3r": RegisteredModel(
+        config_module="llm_core.vllm_config_ministral3R",
+        runner_class="Ministral3RRunner",
         model_name="mistralai/Ministral-3-8B-Reasoning-2512",
     ),
     "phi4_reasoning": RegisteredModel(

@@ -8,9 +8,28 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Any, Callable
 
-from transformers import AutoTokenizer
+from vllm.tokenizers import get_tokenizer
 
 ChatPromptFallback = Callable[[Any, str, str], object]
+
+
+def load_uncached_tokenizer(
+    tokenizer_name: str,
+    revision: str | None = None,
+    tokenizer_revision: str | None = None,
+    trust_remote_code: bool = True,
+    tokenizer_mode: str = "auto",
+    hf_token: str | None = None,
+) -> Any:
+    """Carga un tokenizer respetando el backend seleccionado por `tokenizer_mode`."""
+
+    return get_tokenizer(
+        tokenizer_name,
+        revision=tokenizer_revision or revision,
+        trust_remote_code=trust_remote_code,
+        tokenizer_mode=tokenizer_mode,
+        token=hf_token,
+    )
 
 
 @lru_cache(maxsize=8)
@@ -19,15 +38,18 @@ def load_tokenizer(
     revision: str | None = None,
     tokenizer_revision: str | None = None,
     trust_remote_code: bool = True,
+    tokenizer_mode: str = "auto",
     hf_token: str | None = None,
 ) -> Any:
-    """Carga y cachea un tokenizer de Hugging Face con parametros estables."""
+    """Carga y cachea un tokenizer con parametros estables para conteo de prompts."""
 
-    return AutoTokenizer.from_pretrained(
-        tokenizer_name,
-        revision=tokenizer_revision or revision,
+    return load_uncached_tokenizer(
+        tokenizer_name=tokenizer_name,
+        revision=revision,
+        tokenizer_revision=tokenizer_revision,
         trust_remote_code=trust_remote_code,
-        token=hf_token,
+        tokenizer_mode=tokenizer_mode,
+        hf_token=hf_token,
     )
 
 

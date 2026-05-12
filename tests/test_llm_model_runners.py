@@ -9,6 +9,7 @@ import pytest
 
 from llm_core.vllm_config_gemma4 import Gemma4Runner, MODEL as GEMMA4_MODEL, QUANTIZED_MODEL as GEMMA4_QUANTIZED_MODEL
 from llm_core.vllm_config_gemma4_e4b import Gemma4E4BRunner, MODEL as GEMMA4_E4B_MODEL
+from llm_core.vllm_config_ministral3R import Ministral3RRunner, QUANTIZED_MODEL as MINISTRAL3R_QUANTIZED_MODEL
 from llm_core.vllm_config_qwen36 import Qwen3Runner, MODEL as QWEN3_MODEL
 from llm_core.vllm_engine import VLLMRuntimeDefaults
 
@@ -49,6 +50,20 @@ def test_gemma4_runner_promotes_awq_variant_when_bf16_offload_is_not_viable(
     assert cfg.dtype == "float16"
     assert cfg.cpu_offload_gb > 0.0
     assert cfg.disable_hybrid_kv_cache_manager is True
+
+
+def test_ministral3r_runner_supports_force_quantized_variant(monkeypatch: pytest.MonkeyPatch) -> None:
+    """El runner debe poder propagar el flag que fuerza `quantized_variant`."""
+
+    monkeypatch.setattr("llm_core.vllm_engine.torch.cuda.is_available", lambda: False)
+
+    runner = Ministral3RRunner(runtime_defaults=VLLMRuntimeDefaults(force_quantized_variant=True, max_tokens=64))
+    cfg = runner.configure("Sistema", "Usuario")
+
+    assert cfg.model == MINISTRAL3R_QUANTIZED_MODEL
+    assert cfg.tokenizer == MINISTRAL3R_QUANTIZED_MODEL
+    assert cfg.quantization == "compressed-tensors"
+    assert cfg.dtype == "float16"
 
 
 def test_qwen3_runner_configures_profile_and_strips_think_blocks(monkeypatch: pytest.MonkeyPatch) -> None:
