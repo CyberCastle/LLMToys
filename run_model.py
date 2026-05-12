@@ -15,7 +15,7 @@ from llm_core.vllm_engine import VLLMRuntimeDefaults
 # =====================================================================
 # SELECCIÓN DE MODELO — Cambia esta variable para elegir el modelo
 # =====================================================================
-ACTIVE_MODEL = "gemma4"  # "gemma4" | "gemma4_e4b" | "qwen3"
+ACTIVE_MODEL = "gemma4"  # "gemma4" | "gemma4_e4b" | "qwen3" | "ministral3" | "phi4_reasoning"
 # =====================================================================
 
 # =====================================================================
