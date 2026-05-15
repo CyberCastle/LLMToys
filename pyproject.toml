@@ -28,7 +28,7 @@ dependencies = [
     "torchaudio==2.11.0",
     "torchvision==0.26.0",
     "transformers>=5.7.0",
-    "vllm>=0.20.2,<0.21.0",
+    "vllm==0.21.0",
 ]
 
 [build-system]
@@ -52,7 +52,10 @@ filterwarnings = [
 
 [tool.uv]
 package = false
-override-dependencies = ["transformers>=5.7.0", "compressed-tensors>=0.15.1a20260428",]
+# `vllm 0.21.0` depreca `transformers` v4, pero `llmcompressor` todavia
+# publica pines transitorios a `transformers` v4 y `compressed-tensors`
+# anteriores. Estas overrides mantienen el stack del repo en la rama validada.
+override-dependencies = ["transformers>=5.7.0", "compressed-tensors>=0.15.1a20260503",]
 
 [tool.uv.sources]
 torch = { index = "pytorch-cu130" }

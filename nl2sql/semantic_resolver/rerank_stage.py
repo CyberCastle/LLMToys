@@ -76,7 +76,7 @@ def _build_runtime(
 
     # El reranker se usa en una ventana corta y luego se descarga. Eager evita
     # compilar/capturar grafos sin aportar valor material y reduce fallos de
-    # arranque por memoria en vLLM 0.20 sobre GPUs de 16 GiB.
+    # arranque por memoria en vLLM 0.21 sobre GPUs de 16 GiB.
     llm = build_local_llm(
         LLM,
         model=model,

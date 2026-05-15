@@ -24,7 +24,14 @@ from llm_core.vllm_interface import VLLMModelRunner
 def test_list_supported_models_returns_sorted_aliases() -> None:
     """Expone los aliases soportados en orden alfabetico estable."""
 
-    assert list_supported_models() == ("gemma4", "gemma4_e4b", "qwen3")
+    assert list_supported_models() == (
+        "gemma4",
+        "gemma4_e4b",
+        "ministral3i",
+        "ministral3r",
+        "phi4_reasoning",
+        "qwen3",
+    )
 
 
 def test_resolve_model_name_for_gemma4_e4b() -> None:

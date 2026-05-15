@@ -158,7 +158,7 @@ source .venv/bin/activate
 ## Known Constraints & Gotchas
 
 - **XiYanSQL 7B on 16 GiB**: requires `enforce_eager=True` (prevents `torch.compile` / inductor OOM) + `cpu_offload_gb=3.0`. Without `enforce_eager`, allocation during autotuning kills the process.
-- **Embedding / pooling runtimes on vLLM 0.20+**: `semantic_prune` and `semantic_resolver` must run with `enforce_eager=True`; for short-lived engines on 16 GiB VRAM, `torch.compile` + cudagraph profiling reduces effective KV cache capacity and can prevent startup even when the model fits in eager mode.
+- **Embedding / pooling runtimes on vLLM 0.21+**: `semantic_prune` and `semantic_resolver` must run with `enforce_eager=True`; for short-lived engines on 16 GiB VRAM, `torch.compile` + cudagraph profiling reduces effective KV cache capacity and can prevent startup even when the model fits in eager mode.
 - **Sequential engines**: load the embedding engine -> run -> destroy -> load the reranker engine. Do not hold both in VRAM at the same time.
 - **`BatchEncoding` from `tokenizer.apply_chat_template(tokenize=True)`**: this returns `BatchEncoding`, not a list. Extract `input_ids` before constructing `TokensPrompt`.
 - **CTE table names in SQL validation**: the AST validator must ignore CTE aliases when checking `sql_uses_unknown_table`; otherwise it raises false positives on CTE names such as `base`.
@@ -187,7 +187,7 @@ If an NL2SQL tuning table / list / mapping / regex appears in Python and it is n
 - The current contract is `VLLMRuntimeDefaults` + `VLLMModelRunner`; `VLLMDefaults` no longer applies.
 - `vllm_engine.py` is model-agnostic; model-specific behavior lives in `model_registry.py`, runtime profiles, and `vllm_config_*` modules.
 - `prompt_optimizer.py` uses the new contract and requires `llmlingua` for effective compression.
-- `cyankiwi/gemma-4-26B-A4B-it-AWQ-4bit` is supported again on `vllm 0.20.x` as the `QuantizedVariant` fallback for Gemma 26B; keep `quantization="compressed-tensors"`, `dtype="float16"`, and an `awq_4bit` estimate of about `16.0 GiB`.
+- `cyankiwi/gemma-4-26B-A4B-it-AWQ-4bit` is supported again on `vllm 0.21.x` as the `QuantizedVariant` fallback for Gemma 26B; keep `quantization="compressed-tensors"`, `dtype="float16"`, and an `awq_4bit` estimate of about `16.0 GiB`.
 - In `vllm 0.19.x`, `cpu_offload_gb > 0` can break initialization; the builder must force `disable_hybrid_kv_cache_manager=True` when offload is enabled.
 - The final NCCL warning in `run_model.py` with Qwen3 remains open and does not have a clean confirmed workaround from `llm_core`.
 

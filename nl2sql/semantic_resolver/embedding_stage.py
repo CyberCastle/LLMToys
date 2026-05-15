@@ -77,7 +77,7 @@ def _build_llm(
     trust_remote_code: bool,
 ) -> Any:
     # Estos engines son efimeros y se cargan secuencialmente. Forzar eager evita
-    # el overhead de `torch.compile`/cudagraphs que en vLLM 0.20 reduce el
+    # el overhead de `torch.compile`/cudagraphs que en vLLM 0.21 reduce el
     # budget efectivo de KV cache sobre 16 GiB.
     try:
         return build_local_llm(

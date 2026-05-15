@@ -77,7 +77,7 @@ def _build_runtime(
     # `runner=`/`convert=` para embeddings, mientras `PoolerConfig` no acepta
     # `normalize`. Ademas se fuerza eager para evitar el costo de
     # `torch.compile`/cudagraphs en un engine corto que arranca y se destruye
-    # dentro del pipeline; en vLLM 0.20 eso estabiliza el budget de KV cache en
+    # dentro del pipeline; en vLLM 0.21 eso estabiliza el budget de KV cache en
     # la RTX 3080 Ti Laptop de 16 GiB.
     llm = build_local_llm(
         LLM,
