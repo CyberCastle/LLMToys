@@ -6,13 +6,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import re
+import regex
 
 from nl2sql.config.models import QuerySignalRules
 from nl2sql.utils.normalization import normalize_text_for_matching
 from nl2sql.utils.spanish_morphology import singularize_token
 
-_TERM_RE = re.compile(r"[a-z0-9_]+")
+_TERM_RE = regex.compile(r"[\p{L}\p{N}_]+")
 
 
 @dataclass(frozen=True)
@@ -77,9 +77,9 @@ def infer_query_signal_profile(query: str, signal_rules: QuerySignalRules) -> Qu
         query_terms=query_terms,
         metric_terms=metric_terms,
         dimension_terms=frozenset(dimension_terms),
-        wants_temporal=bool(query_terms & signal_rules.query_temporal_terms or re.search(r"\bultim(?:o|a|os|as)\b", normalized_query)),
+        wants_temporal=bool(query_terms & signal_rules.query_temporal_terms or regex.search(r"\bultim(?:o|a|os|as)\b", normalized_query)),
         wants_aggregation=bool(query_terms & signal_rules.query_aggregation_terms),
-        wants_grouping=bool(re.search(r"\bpor\b", normalized_query) or "group by" in normalized_query),
+        wants_grouping=bool(regex.search(r"\bpor\b", normalized_query) or "group by" in normalized_query),
     )
 
 

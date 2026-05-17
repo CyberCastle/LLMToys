@@ -5,11 +5,12 @@
 
 from __future__ import annotations
 
-import re
+import regex
 import unicodedata
 
-_WHITESPACE_RE = re.compile(r"\s+")
-_NON_WORD_RE = re.compile(r"[^a-z0-9_ ]+")
+_WHITESPACE_RE = regex.compile(r"\s+")
+_NON_WORD_RE = regex.compile(r"[^\p{L}\p{N}_ ]+")
+_SLUG_INVALID_RE = regex.compile(r"[^a-z0-9_]+")
 
 
 def normalize_text_for_matching(
@@ -42,5 +43,5 @@ def slugify_identifier(value: str, *, fallback: str = "item") -> str:
     """Normaliza texto libre a un identificador estable en snake_case."""
 
     normalized = normalize_text_for_matching(value, keep_underscore=True, ascii_fallback=True)
-    slug = re.sub(r"[^a-z0-9_]+", "_", normalized).strip("_")
+    slug = _SLUG_INVALID_RE.sub("_", normalized).strip("_")
     return slug or fallback

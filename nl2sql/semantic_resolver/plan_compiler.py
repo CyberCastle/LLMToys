@@ -5,8 +5,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from functools import partial
-import re
 from typing import TYPE_CHECKING, Iterable, Mapping
+
+import regex
 
 from nl2sql.utils.decision_models import DecisionIssue, dedupe_decision_issues
 from nl2sql.utils.normalization import normalize_text_for_matching
@@ -54,6 +55,10 @@ if TYPE_CHECKING:
 
 
 _normalize_text = partial(normalize_text_for_matching, keep_underscore=False)
+_TOKEN_RE = regex.compile(r"[\p{L}\p{N}_]+")
+_GROUP_PHRASE_SPLIT_RE = regex.compile(r"\s+y\s+|\s+e\s+|,")
+_COUNT_DISTINCT_FORMULA_RE = regex.compile(r"count_distinct\([a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*\)")
+_FORMULA_WHITESPACE_RE = regex.compile(r"\s+")
 
 
 def _default_rules() -> CompilerRules:
@@ -66,7 +71,7 @@ def _default_rules() -> CompilerRules:
 
 
 def _tokenize(text: str) -> tuple[str, ...]:
-    return tuple(token for token in re.findall(r"[a-z0-9_]+", _normalize_text(text)) if token)
+    return tuple(token for token in _TOKEN_RE.findall(_normalize_text(text)) if token)
 
 
 def _dedupe_preserve(values: Iterable[str]) -> list[str]:
@@ -190,7 +195,7 @@ def _extract_group_phrases(
         if isinstance(raw_dimension, str) and raw_dimension.strip():
             group_phrases.append(raw_dimension.strip())
     for match in rules.group_by_pattern.finditer(query_norm):
-        for raw_phrase in re.split(r"\s+y\s+|\s+e\s+|,", match.group(1)):
+        for raw_phrase in _GROUP_PHRASE_SPLIT_RE.split(match.group(1)):
             phrase = raw_phrase.strip()
             if phrase:
                 group_phrases.append(phrase)
@@ -331,7 +336,7 @@ def _score_metric_candidate(
         score_components["hinted_entity_boost"] = weights.hinted_entity_boost
     if source_table is not None and any(token in _tokenize(source_table) for token in measure_terms):
         score_components["source_table_hint_boost"] = weights.source_table_hint_boost
-    if re.fullmatch(r"count_distinct\([a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*\)", formula):
+    if _COUNT_DISTINCT_FORMULA_RE.fullmatch(formula):
         score_components["count_distinct_bonus"] = weights.count_distinct_bonus
     if "count" in formula and intent == "post_aggregated_metric":
         score_components["post_aggregated_count_bonus"] = weights.post_aggregated_count_bonus
@@ -1451,7 +1456,7 @@ def _build_compiled_candidate(
 
 def _normalize_formula(formula: str) -> str:
     """Normaliza formulas para comparacion tolerante a espacios y mayusculas."""
-    return re.sub(r"\s+", "", formula.strip().lower())
+    return _FORMULA_WHITESPACE_RE.sub("", formula.strip().lower())
 
 
 def _find_matching_join_path(
